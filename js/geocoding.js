@@ -21,10 +21,10 @@ async function obtenerDireccionDesdeCoordenadas(lat, lng) {
 
     if (data && data.address) {
       const a = data.address;
-      
+
       const calle = a.road || a.pedestrian || a.suburb || a.neighbourhood || "";
       const numero = a.house_number ? ` ${a.house_number}` : "";
-      
+
       const direccionCompleta = (calle + numero).trim();
 
       return {

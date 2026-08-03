@@ -2,15 +2,15 @@
 // MÓDULO 4: GESTIÓN DE DATOS DEL FORMULARIO
 // ==========================================
 
-window.idEdicionActual = null; 
+window.idEdicionActual = null;
 
 const CAMPOS_FORMULARIO = [
-  'f-visitado', 'f-relevo', 'f-distrito', 'f-barrio', 'f-direccion', 'f-tipolote', 
-  'f-estado', 'f-frente', 'f-fondo', 'f-agua', 'f-cloaca', 'f-propietario', 
+  'f-visitado', 'f-relevo', 'f-distrito', 'f-barrio', 'f-direccion', 'f-tipolote',
+  'f-estado', 'f-frente', 'f-fondo', 'f-agua', 'f-cloaca', 'f-propietario',
   'f-contacto', 'f-vendedor', 'f-notas'
 ];
 
-window.limpiarFormulario = function() {
+window.limpiarFormulario = function () {
   CAMPOS_FORMULARIO.forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
@@ -18,7 +18,7 @@ window.limpiarFormulario = function() {
     else if (el.tagName === 'SELECT') el.selectedIndex = 0;
     else el.value = "";
   });
-  
+
   // 🟢 Limpieza manual del buffer de fotos y vista previa
   window.fotosParaSubir = [];
   const contenedorPrevio = document.getElementById('vista-previa-fotos');
@@ -33,7 +33,7 @@ window.limpiarFormulario = function() {
 // POBLADO Y LIMPIEZA DE CAMPOS DEL FORMULARIO
 // ==========================================
 
-window.cargarDatosEnFormulario = function(terreno) {
+window.cargarDatosEnFormulario = function (terreno) {
   if (!terreno) return;
 
   // Mapa de ID del Input -> Valor en la propiedad del Terreno
@@ -66,8 +66,8 @@ window.cargarDatosEnFormulario = function(terreno) {
       let opcionEncontrada = false;
       // Buscar coincidencia exacta o insensible a mayúsculas
       for (let i = 0; i < el.options.length; i++) {
-        if (el.options[i].value.toLowerCase() === valor.toLowerCase() || 
-            el.options[i].text.toLowerCase() === valor.toLowerCase()) {
+        if (el.options[i].value.toLowerCase() === valor.toLowerCase() ||
+          el.options[i].text.toLowerCase() === valor.toLowerCase()) {
           el.selectedIndex = i;
           opcionEncontrada = true;
           break;
@@ -80,13 +80,14 @@ window.cargarDatosEnFormulario = function(terreno) {
   });
 };
 
-window.obtenerDatosFormulario = function() {
+window.obtenerDatosFormulario = function () {
   const getVal = (id, def = "") => document.getElementById(id) ? document.getElementById(id).value.trim() : def;
-  
+
   return {
-    id: window.idEdicionActual, 
+    id: window.idEdicionActual,
     lat: window.selectedLat,
     lng: window.selectedLng,
+    colB: getVal('f-colb', window.datosEdicionActualColB || ""),
     visitado: getVal('f-visitado', 'No'), relevo: getVal('f-relevo'),
     distrito: getVal('f-distrito'), barrio: getVal('f-barrio'),
     direccion: getVal('f-direccion'), tipolote: getVal('f-tipolote', 'Entre Medianeras'),
@@ -97,26 +98,26 @@ window.obtenerDatosFormulario = function() {
   };
 };
 
-window.procesarFormulario = async function() {
+window.procesarFormulario = async function () {
   const datos = window.obtenerDatosFormulario();
-  
+
   // 1️⃣ RAYOS X: ¿Qué capturó exactamente el formulario?
   console.log("📝 [DEBUG] Datos listos para enviar:", datos);
-  
+
   if (!datos.lat || !datos.lng) return alert("Faltan coordenadas.");
   if (!datos.direccion) return alert("Falta la dirección. Espera a que el buscador termine o escríbela a mano.");
 
   if (typeof window.actualizarPinFantasmaDesdeFormulario === 'function') {
     window.actualizarPinFantasmaDesdeFormulario();
   }
-  
-  if (window.Editor) window.Editor.cerrar(true); 
+
+  if (window.Editor) window.Editor.cerrar(true);
   if (typeof window.mostrarToast === 'function') window.mostrarToast("Guardando datos...");
 
   try {
     console.log("⏳ [DEBUG] Enviando a Google Sheets...");
     const idAsignado = await guardarTerrenoEnSheets(datos);
-    
+
     // 2️⃣ RAYOS X: ¿Qué respondió Google Sheets?
     console.log("✅ [DEBUG] Respuesta del backend (ID):", idAsignado);
 
@@ -126,7 +127,7 @@ window.procesarFormulario = async function() {
         try {
           const idsFotosSubidas = await window.Fotos_procesarYSubirADrive(idAsignado);
           console.log("☁️ [DEBUG] Fotos subidas con éxito. IDs:", idsFotosSubidas);
-          
+
           if (idsFotosSubidas.length > 0 && typeof window.guardarIdsFotosEnHoja2 === 'function') {
             await window.guardarIdsFotosEnHoja2(idAsignado, idsFotosSubidas);
             console.log("🔗 [DEBUG] IDs de fotos vinculados en Sheets.");

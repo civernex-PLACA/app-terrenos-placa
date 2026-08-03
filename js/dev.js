@@ -4,7 +4,7 @@
 
 const DevModule = {
   // 🔘 INTERRUPTOR MASTER (Ponlo en 'false' cuando vayas a producción)
-  ACTIVAR_DEV_MODE: true,
+  ACTIVAR_DEV_MODE: false,
 
   flags: {
     geocoding: true,
@@ -16,7 +16,7 @@ const DevModule = {
 
   backups: {},
 
-  init: function() {
+  init: function () {
     // Si el modo DEV está desactivado, el módulo se apaga por completo
     if (!this.ACTIVAR_DEV_MODE) return;
 
@@ -39,7 +39,7 @@ const DevModule = {
     console.log("🛠️ DevModule Activado. Usa 'Shift + D' para abrir el panel de diagnóstico.");
   },
 
-  inyectarInterfazDEV: function() {
+  inyectarInterfazDEV: function () {
     if (document.getElementById('modal-dev')) return;
 
     // Inyectar HTML Modal 100% limpio sin tags <style> inline
@@ -85,7 +85,7 @@ const DevModule = {
     document.body.appendChild(modalHTML);
   },
 
-  toggleModal: function() {
+  toggleModal: function () {
     if (!this.ACTIVAR_DEV_MODE) return;
     const modal = document.getElementById('modal-dev');
     if (!modal) return;
@@ -97,7 +97,7 @@ const DevModule = {
     }
   },
 
-  abrirPanel: function() {
+  abrirPanel: function () {
     if (!this.ACTIVAR_DEV_MODE) return;
     const modal = document.getElementById('modal-dev');
     if (!modal) return;
@@ -110,12 +110,12 @@ const DevModule = {
     modal.style.display = 'flex';
   },
 
-  cerrarPanel: function() {
+  cerrarPanel: function () {
     const modal = document.getElementById('modal-dev');
     if (modal) modal.style.display = 'none';
   },
 
-  toggleModulo: function(modulo) {
+  toggleModulo: function (modulo) {
     if (!this.ACTIVAR_DEV_MODE) return;
     const checkbox = document.getElementById(`dev-${modulo}`);
     if (!checkbox) return;

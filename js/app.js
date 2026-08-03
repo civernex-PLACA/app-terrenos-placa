@@ -2,9 +2,9 @@
 // MÓDULO 4: ORQUESTADOR PRINCIPAL
 // ==========================================
 
-window.onload = function() {
+window.onload = function () {
   console.log("⚙️ Página cargada. Inicializando Auth...");
-  inicializarAuth(); 
+  inicializarAuth();
 };
 
 // UTILIDAD GLOBAL: Detección por proporción (Igual que CSS)
@@ -17,7 +17,7 @@ function esModoHorizontal() {
 window.esModoHorizontal = esModoHorizontal;
 
 // UTILIDAD GLOBAL: Traductor de datos a interfaz visual (Pin)
-window.obtenerAtributosPin = function(estado, visitado, calificacion, esFantasma) {
+window.obtenerAtributosPin = function (estado, visitado, calificacion, esFantasma) {
   // 1. Si es el Pin Fantasma mientras se cargan datos -> GRIS
   if (esFantasma) {
     return {
@@ -69,10 +69,19 @@ function cargarIconosUI() {
   const icoRegla = document.getElementById('icono-regla');
   if (icoRegla) icoRegla.innerHTML = Iconos.regla();
 
+  const icoLogout = document.getElementById('icono-logout');
+  if (icoLogout && typeof Iconos !== 'undefined' && Iconos.salir) {
+    icoLogout.innerHTML = Iconos.salir();
+  }
+
   // Mantenemos el chequeo defensivo por si el panel DEV está activo o no
   const icoDev = document.getElementById('icono-dev');
   if (icoDev && typeof Iconos !== 'undefined' && Iconos.dev) {
     icoDev.innerHTML = Iconos.dev();
+  }
+  const contenedorIconoSecciones = document.getElementById('icono-secciones');
+  if (contenedorIconoSecciones && typeof Iconos !== 'undefined' && Iconos.capas) {
+  contenedorIconoSecciones.innerHTML = Iconos.capas();
   }
 }
 
@@ -86,11 +95,15 @@ async function iniciarApp() {
   // 2. Iniciamos el mapa
   inicializarMapa();
 
-  // 3. Descargar datos de terrenos
-  await descargarYCruzarDatos();
-  
+  // 🟢 3. DESCARGA AUTOMÁTICA DE CAPAS GEOJSON DESDE DRIVE
+  if (window.CapasDrive) {
+    window.CapasDrive.sincronizarCapas();
+  }
 
-  // 4. Reconstruir los menúes desplegables
+  // 4. Descargar datos de terrenos (Sheets)
+  await descargarYCruzarDatos();
+
+  // 5. Reconstruir los menúes desplegables
   if (typeof construirFormularioDinamico === 'function') {
     construirFormularioDinamico();
   }
@@ -105,20 +118,20 @@ async function iniciarApp() {
 // ==========================================
 
 // Temporizador de 30 segundos para refrescar datos desde Google Sheets
-const INTERVALO_REFRESCO_MS = 30 * 1000; 
+const INTERVALO_REFRESCO_MS = 30 * 1000;
 
 setInterval(() => {
   // Verificamos si devFlags permite la sincro y si la función existe
   const syncPermitida = typeof devFlags === 'undefined' || devFlags.sync;
-  
+
   if (syncPermitida && typeof descargarYCruzarDatos === 'function') {
     // Le pasamos 'true' para que se ejecute en segundo plano sin abrir el Toast
-    descargarYCruzarDatos(true); 
+    descargarYCruzarDatos(true);
   }
 
   // 🟢 NUEVO: Disparar el procesador de la cola de fotos rezagadas
   if (syncPermitida && typeof window.ProcesarColaFotos === 'function') {
     window.ProcesarColaFotos();
   }
-  
+
 }, INTERVALO_REFRESCO_MS);
