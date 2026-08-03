@@ -10,7 +10,7 @@ function inicializarAuth() {
   const token = obtenerToken();
   if (token) {
     // ✅ CORRECCIÓN: Inyectamos el token en window para que drive.js y api.js lo encuentren
-    window.gapiToken = token; 
+    window.gapiToken = token;
     iniciarApp();
     obtenerDatosUsuarioYConectarPresencia(token);
   }
@@ -28,8 +28,8 @@ function prepararClienteGoogle() {
         callback: (tokenResponse) => {
           if (tokenResponse && tokenResponse.access_token) {
             localStorage.setItem('google_access_token', tokenResponse.access_token);
-            window.gapiToken = tokenResponse.access_token; 
-            
+            window.gapiToken = tokenResponse.access_token;
+
             // Si estábamos renovando un token vencido...
             if (tokenPromiseResolver) {
               tokenPromiseResolver(tokenResponse.access_token);
@@ -40,11 +40,11 @@ function prepararClienteGoogle() {
               obtenerDatosUsuarioYConectarPresencia(tokenResponse.access_token);
             }
           } else {
-             // Si falló la renovación
-             if (tokenPromiseResolver) {
-                 tokenPromiseResolver(null);
-                 tokenPromiseResolver = null;
-             }
+            // Si falló la renovación
+            if (tokenPromiseResolver) {
+              tokenPromiseResolver(null);
+              tokenPromiseResolver = null;
+            }
           }
         },
       });
@@ -65,7 +65,7 @@ function iniciarSesion() {
 }
 
 // NUEVA FUNCIÓN GLOBAL PARA RENOVAR TOKEN EN PLENO VUELO
-window.renovarToken = function() {
+window.renovarToken = function () {
   return new Promise((resolve) => {
     if (typeof google === 'undefined' || !google.accounts) {
       resolve(null);
@@ -74,10 +74,10 @@ window.renovarToken = function() {
     console.warn("🔄 [Auth] Solicitando nuevo token a Google...");
     prepararClienteGoogle();
     tokenPromiseResolver = resolve; // Guardamos la resolución de la promesa
-    
+
     // Al no pasar 'prompt: consent', Google suele renovarlo silenciosamente 
     // o con un popup que se cierra casi al instante.
-    tokenClient.requestAccessToken({ prompt: '' }); 
+    tokenClient.requestAccessToken({ prompt: '' });
   });
 };
 
@@ -87,7 +87,7 @@ async function obtenerDatosUsuarioYConectarPresencia(accessToken) {
     const respuesta = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
       headers: { 'Authorization': `Bearer ${accessToken}` }
     });
-    
+
     if (respuesta.ok) {
       const usuarioGoogle = await respuesta.json();
       // Conectar con el módulo de presencia si la función existe

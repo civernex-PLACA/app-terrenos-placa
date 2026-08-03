@@ -13,6 +13,7 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="https://accounts.google.com/gsi/client" async defer></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.9.0/proj4.js"></script>
   
   <!-- ESTILOS PROPIOS -->
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap">
@@ -34,9 +35,6 @@
 
     <!-- CONTENEDOR DE AVATARES DE PRESENCIA -->
     <div id="avatar-stack" class="avatar-stack"></div>
-
-    <!-- Botón Salir -->
-    <button class="btn-logout" onclick="cerrarSesion()">Salir</button>
     
     <!-- Mapa de Leaflet -->
     <div id="map"></div>
@@ -48,7 +46,12 @@
     </div>
   
 <!-- DOCK DE HERRAMIENTAS VECTORIAL (BARRA CONTINUA) -->
+ 
 <div class="app-dock">
+  <button id="btn-logout" class="dock-btn btn-logout-dock" title="Cerrar Sesión" onclick="cerrarSesion()">
+    <span id="icono-logout"></span>
+  </button>
+
   <button id="btn-add" class="dock-btn btn-primary-action" title="Agregar Terreno" onclick="toggleAddMode(event)">
     <span id="icono-agregar"></span>
   </button>
@@ -60,8 +63,11 @@
   <button id="btn-ruler" class="dock-btn" title="Medir Distancia" onclick="toggleRegla()">
     <span id="icono-regla"></span>
   </button>
+  
+<button id="btn-secciones" class="btn-herramienta" onclick="window.Poligonos.toggleSecciones()" title="Ver Secciones">
+  <span id="icono-secciones">🗺️</span>
+</button>
 
-  <!-- 🟢 NUEVO BOTÓN PARA CAMBIAR CAPA SATELITAL -->
   <button id="btn-satelite" class="dock-btn" title="Cambiar Vista Satelital / Mapa" onclick="toggleCapasMapa()">
     <span id="icono-satelite"></span>
   </button>
@@ -141,56 +147,29 @@
 
   </div>
 
-  <!-- LOGGER DE ERRORES Y BITÁCORA DE RASTREO (DEV TRACE) -->
+<!-- LOGGER DE ERRORES Y BITÁCORA DE RASTREO (DEV TRACE) -->
   <script>
     window.DevTrace = {
       log: function(modulo, evento, detalle = '') {
-        const hora = new Date().toLocaleTimeString();
-        const msg = `[${hora}] <b>${modulo}</b> ➔ ${evento} ${detalle ? `<br><small style="color:#ddd">${detalle}</small>` : ''}`;
+        // Los mensajes ahora solo van a la consola invisible (F12) para no molestar al usuario
         console.log(`[DevTrace] ${modulo} -> ${evento}`, detalle);
-        this._imprimirEnPantalla(msg, '#1a73e8');
       },
       error: function(msg) {
-        this._imprimirEnPantalla(`<b>🔴 ERROR CRÍTICO:</b><br>${msg}`, '#ea4335');
+        console.error(`[DevTrace ERROR] ${msg}`);
       },
       _imprimirEnPantalla: function(htmlMsg, colorBorde) {
-        let div = document.getElementById('dev-trace-console');
-        if (!div) {
-          div = document.createElement('div');
-          div.id = 'dev-trace-console';
-          div.className = 'dev-trace-box';
-          
-          div.innerHTML = `
-            <div class="dev-trace-header">
-              <span>🔍 BITÁCORA DE EJECUCIÓN (DEV TRACE)</span>
-              <div>
-                <button onclick="document.getElementById('dev-trace-logs').innerHTML=''" class="dev-trace-btn">Limpiar</button>
-                <button onclick="this.parentElement.parentElement.parentElement.remove()" class="dev-trace-btn btn-close">❌</button>
-              </div>
-            </div>
-            <div id="dev-trace-logs"></div>
-          `;
-          document.body.appendChild(div);
-        }
-        const logs = document.getElementById('dev-trace-logs');
-        if (logs) {
-          const item = document.createElement('div');
-          item.className = 'dev-trace-item';
-          item.style.borderLeftColor = colorBorde; // Dinámico para el tipo de error
-          item.innerHTML = htmlMsg;
-          logs.insertBefore(item, logs.firstChild);
-        }
+        // 🟢 FUNCIÓN VACIADA: Ya no creará la caja negra en la pantalla
       }
     };
 
     window.onerror = function(msg, url, linea, col, error) {
       const archivo = url ? url.substring(url.lastIndexOf('/') + 1) : 'HTML/Desconocido';
-      window.DevTrace.error(`${msg}<br><b>Archivo:</b> ${archivo} (Línea ${linea})`);
+      console.error(`${msg} - Archivo: ${archivo} (Línea ${linea})`);
       return false;
     };
 
     window.addEventListener('unhandledrejection', function(e) {
-      window.DevTrace.error(`Promesa Rechazada: ${e.reason?.message || e.reason}`);
+      console.error(`Promesa Rechazada: ${e.reason?.message || e.reason}`);
     });
   </script>
 
@@ -199,6 +178,9 @@
   <script src="js/dev.js"></script>
   <script src="js/presencia.js?v=1"></script>
   <script src="js/geocoding.js?v=4"></script>
+  <script src="js/GeoJson.js"></script>
+  <script src="js/capasDrive.js"></script>
+  <script src="js/poligonos.js"></script>
   <script src="js/api.js?v=4"></script>
   <script src="js/editor.js"></script>
   <script src="js/formulario.js?v=4"></script>

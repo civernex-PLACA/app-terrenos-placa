@@ -15,6 +15,8 @@ window.modoEdicionActivo = false;
 window.idEdicionActual = null;
 window.selectedLat = null;
 window.selectedLng = null;
+window.terrenosCache = window.terrenosCache || {};
+window.datosGisTemporales = null; // 🟢 Memoria RAM para el polígono que estamos por agregar
 
 // Regla y GPS
 let modoRegla = false;
@@ -30,7 +32,8 @@ let modoSatelite = false;
 function inicializarMapa() {
   if (map) return;
 
-  map = L.map('map').setView([-27.362, -55.890], 13);
+  // Removidos los botones de zoom (+/-) de Leaflet
+  map = L.map('map', { zoomControl: false }).setView([-27.362, -55.890], 13);
 
   // 1. Capa estándar OpenStreetMap
   capaOSM = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -38,8 +41,8 @@ function inicializarMapa() {
     attribution: '© OpenStreetMap'
   });
 
-  // 2. Capa Satelital de Google Maps (Híbrida con nombres de calles)
-  capaGoogleSatelite = L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', {
+  // 2. Capa Satelital de Google Maps (Imágenes satelitales puras sin etiquetas)
+  capaGoogleSatelite = L.tileLayer('https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', {
     maxZoom: 20,
     attribution: '© Google Maps'
   });
@@ -54,6 +57,9 @@ function inicializarMapa() {
   const contenedorIcono = document.getElementById('icono-satelite');
   if (contenedorIcono && typeof Iconos !== 'undefined' && Iconos.satelite) {
     contenedorIcono.innerHTML = Iconos.satelite();
+
+    // 🟢 Inicializar motor de polígonos
+    if (window.Poligonos) window.Poligonos.init(map);
   }
 }
 
@@ -65,7 +71,7 @@ function toggleCapasMapa() {
   if (modoSatelite) {
     map.removeLayer(capaOSM);
     capaGoogleSatelite.addTo(map);
-    if (btn) btn.classList.add('herramienta-activa'); // Pinta o destaca el botón en el Dock
+    if (btn) btn.classList.add('herramienta-activa');
     if (typeof mostrarToast === 'function') mostrarToast("Modo Satelital activado");
   } else {
     map.removeLayer(capaGoogleSatelite);
@@ -88,14 +94,14 @@ function dibujarPinEnMapa(lat, lng, id, colorHex, direccion, ficha = {}) {
     ? window.obtenerAtributosPin(ficha.estado, ficha.visitado, ficha.calificacion, false)
     : { colorHex: colorHex || '#1a73e8', forma: 'gota', visitado: false, tachado: false };
 
-  const svgPin = typeof Iconos !== 'undefined' 
-    ? Iconos.generarPinDinamico({ 
-        colorHex: atributos.colorHex, 
-        forma: atributos.forma, 
-        visitado: atributos.visitado, 
-        tachado: atributos.tachado,
-        esFantasma: false 
-      }) 
+  const svgPin = typeof Iconos !== 'undefined'
+    ? Iconos.generarPinDinamico({
+      colorHex: atributos.colorHex,
+      forma: atributos.forma,
+      visitado: atributos.visitado,
+      tachado: atributos.tachado,
+      esFantasma: false
+    })
     : '';
 
   const markerIcon = L.divIcon({
@@ -108,6 +114,7 @@ function dibujarPinEnMapa(lat, lng, id, colorHex, direccion, ficha = {}) {
 
   const marker = L.marker([lat, lng], { icon: markerIcon });
   const terrenoCompleto = { id, direccion: direccion || '', lat, lng, ...ficha };
+  window.terrenosCache[id] = terrenoCompleto;
 
   let carruselPopupHTML = "";
   try {
@@ -123,9 +130,6 @@ function dibujarPinEnMapa(lat, lng, id, colorHex, direccion, ficha = {}) {
     }
   } catch (err) { console.error("Error Módulo Tags:", err); }
 
-  const terrenoJSON = JSON.stringify(terrenoCompleto).replace(/'/g, "&#39;").replace(/"/g, "&quot;");
-
-  // Limpiamos los inline-styles del botón, delegando a la clase .btn-popup-editar
   const popupContent = `
     <div class="popup-terreno-container">
       ${carruselPopupHTML}
@@ -144,12 +148,12 @@ function dibujarPinEnMapa(lat, lng, id, colorHex, direccion, ficha = {}) {
         ${ficha.notas ? `<b>Notas:</b> <span class="popup-notas">${ficha.notas}</span><br>` : ''}
       </div>
 
-      <button class="btn-popup-editar" onclick="window.iniciarEdicionDirecta(JSON.parse('${terrenoJSON}'))">✏️ Editar Terreno</button>
+      <button class="btn-popup-editar" onclick="window.iniciarEdicionDirecta('${id}')">✏️ Editar Terreno</button>
     </div>
   `;
 
   marker.bindPopup(popupContent);
-  marker.on('click', function() { terrenoSeleccionadoActual = terrenoCompleto; });
+  marker.on('click', function () { terrenoSeleccionadoActual = terrenoCompleto; });
   markersGroup.addLayer(marker);
 }
 
@@ -157,7 +161,7 @@ function dibujarPinEnMapa(lat, lng, id, colorHex, direccion, ficha = {}) {
 // PIN FANTASMA DINÁMICO
 // ==========================================
 
-window.actualizarPinFantasmaDesdeFormulario = function() {
+window.actualizarPinFantasmaDesdeFormulario = function () {
   if (!window.selectedLat || !window.selectedLng) return;
 
   const estado = document.getElementById('f-estado')?.value;
@@ -172,14 +176,14 @@ window.actualizarPinFantasmaDesdeFormulario = function() {
 
 function crearPinFantasma(lat, lng, atributos = { colorHex: '#9aa0a6', forma: 'gota', visitado: false }) {
   window.removerPinFantasma();
-  
-  const svgGhost = typeof Iconos !== 'undefined' 
-    ? Iconos.generarPinDinamico({ 
-        colorHex: atributos.colorHex, 
-        forma: atributos.forma, 
-        visitado: atributos.visitado, 
-        esFantasma: true 
-      }) 
+
+  const svgGhost = typeof Iconos !== 'undefined'
+    ? Iconos.generarPinDinamico({
+      colorHex: atributos.colorHex,
+      forma: atributos.forma,
+      visitado: atributos.visitado,
+      esFantasma: true
+    })
     : '';
 
   const ghostIcon = L.divIcon({
@@ -188,15 +192,19 @@ function crearPinFantasma(lat, lng, atributos = { colorHex: '#9aa0a6', forma: 'g
     iconSize: [30, 30],
     iconAnchor: [15, 30]
   });
-  
+
   ghostMarker = L.marker([lat, lng], { icon: ghostIcon, zIndexOffset: 1000 }).addTo(map);
 }
 
-window.removerPinFantasma = function() {
+window.removerPinFantasma = function () {
   if (ghostMarker && map) {
     map.removeLayer(ghostMarker);
     ghostMarker = null;
   }
+  
+  // 🟢 NUEVO: Limpiamos el polígono temporal y la memoria de la API de Catastro
+  if (window.Poligonos) window.Poligonos.limpiarFantasma();
+  window.datosGisTemporales = null; 
 };
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -217,12 +225,12 @@ function toggleAddMode() {
   const btn = document.getElementById('btn-add');
 
   if (window.modoAgregar) {
-    if (btn) btn.classList.add('herramienta-activa'); // 🟢 JS solo asigna estado
+    if (btn) btn.classList.add('herramienta-activa'); 
     if (modoRegla) toggleRegla();
     if (window.Editor) window.Editor.cerrar(false);
     mostrarInstruccion("Toca una ubicación en el mapa para ubicar el terreno");
   } else {
-    if (btn) btn.classList.remove('herramienta-activa'); // 🟢 JS revoca estado
+    if (btn) btn.classList.remove('herramienta-activa'); 
     ocultarToast();
   }
 }
@@ -232,14 +240,14 @@ function onMapClick(e) {
     reglaPuntos.push(e.latlng);
     if (reglaPuntos.length === 2) {
       const distMetros = reglaPuntos[0].distanceTo(reglaPuntos[1]);
-      const distTexto = distMetros > 1000 
-        ? `${(distMetros / 1000).toFixed(2)} km` 
+      const distTexto = distMetros > 1000
+        ? `${(distMetros / 1000).toFixed(2)} km`
         : `${distMetros.toFixed(1)} m`;
 
       if (reglaLinea) map.removeLayer(reglaLinea);
       reglaLinea = L.polyline(reglaPuntos, { color: '#fbbc04', weight: 4, dashArray: '6, 8' }).addTo(map);
       mostrarInstruccion(`Distancia: ${distTexto}`);
-      reglaPuntos = []; 
+      reglaPuntos = [];
     }
     return;
   }
@@ -253,27 +261,30 @@ function onMapClick(e) {
 
     window.actualizarPinFantasmaDesdeFormulario();
 
+    // 🟢 Guardamos si este clic fue para crear un terreno nuevo
+    const esTerrenoNuevo = window.modoAgregar || !window.modoEdicionActivo;
+
     if (window.modoAgregar) {
       if (window.Editor) window.Editor.abrirParaNuevo(window.selectedLat, window.selectedLng);
-      toggleAddMode(); 
+      toggleAddMode(); // Desactiva la herramienta
     }
 
-const campoDireccion = document.getElementById('f-direccion');
+    const campoDireccion = document.getElementById('f-direccion');
     if (campoDireccion) {
-      campoDireccion.value = ""; 
+      campoDireccion.value = "";
       campoDireccion.placeholder = "Buscando calle más cercana...";
     }
 
-    // 🟢 NUEVA LÓGICA DE DEBOUNCE (Protección contra spam a la API de OpenStreetMap)
-    if (typeof devFlags !== 'undefined' && devFlags.geocoding && typeof window.obtenerDireccionDesdeCoordenadas === 'function') {
-      
-      // 1. Si ya había una búsqueda en cuenta regresiva, la cancelamos
-      if (timeoutGeocoding) {
-        clearTimeout(timeoutGeocoding);
-      }
+    if (timeoutGeocoding) {
+      clearTimeout(timeoutGeocoding);
+      console.log(`[Mapa] Clic rápido, reiniciando temporizador...`);
+    }
 
-      // 2. Iniciamos una nueva cuenta regresiva de 800ms
-      timeoutGeocoding = setTimeout(() => {
+    timeoutGeocoding = setTimeout(async () => {
+      console.log(`[Mapa] Buscando información del terreno tocado...`);
+      
+      // 1. Buscar Calle (Geocoding Inverso)
+      if (typeof devFlags !== 'undefined' && devFlags.geocoding && typeof window.obtenerDireccionDesdeCoordenadas === 'function') {
         window.obtenerDireccionDesdeCoordenadas(window.selectedLat, window.selectedLng)
           .then(infoLugar => {
             if (campoDireccion && infoLugar.direccion) campoDireccion.value = infoLugar.direccion;
@@ -282,16 +293,68 @@ const campoDireccion = document.getElementById('f-direccion');
           .catch(err => {
             if (campoDireccion) campoDireccion.placeholder = "Fallo al buscar calle";
           });
-      }, 800); // <-- 800 milisegundos de espera
+      }
 
-    } else if (campoDireccion) {
-      campoDireccion.placeholder = "Dirección / Calle";
-    }
+      // 2. Buscar Polígono e Información Catastral en Memoria Local
+      if (esTerrenoNuevo) {
+        if (typeof window.CatastroGIS !== 'undefined') {
+          console.log(`[Mapa] Consultando capa GIS local...`);
+          
+          const datosGIS = await window.CatastroGIS.obtenerDatosPorCoordenada(window.selectedLat, window.selectedLng);
+          
+          if (datosGIS) {
+            console.log(`[Mapa] ¡Parcela encontrada en memoria! Dibujando polígono...`);
+            window.datosGisTemporales = datosGIS;
+
+            // 🟢 AUTOCOMPLETAR CAMPOS DEL FORMULARIO
+            const fDistrito = document.getElementById('f-distrito');
+            if (fDistrito && datosGIS.distrito) fDistrito.value = datosGIS.distrito;
+
+            const fIdGis = document.getElementById('f-idgis');
+            if (fIdGis && datosGIS.idGis) fIdGis.value = datosGIS.idGis;
+
+            const fSeccion = document.getElementById('f-seccion');
+            if (fSeccion && datosGIS.seccion) fSeccion.value = datosGIS.seccion;
+
+            const fChacra = document.getElementById('f-chacra');
+            if (fChacra && datosGIS.chacra) fChacra.value = datosGIS.chacra;
+
+            const fManzana = document.getElementById('f-manzana');
+            if (fManzana && datosGIS.manzana) fManzana.value = datosGIS.manzana;
+
+            const fParcela = document.getElementById('f-parcela');
+            if (fParcela && datosGIS.parcela) fParcela.value = datosGIS.parcela;
+
+            // Dibujar el perímetro rojo en el mapa
+            if (window.Poligonos) window.Poligonos.dibujarFantasma(datosGIS.geoJson);
+          } else {
+            console.log(`[Mapa] No se encontró parcela en esta ubicación.`);
+            window.datosGisTemporales = null;
+          }
+        } else {
+          console.error(`[Mapa] ❌ ERROR: Módulo window.CatastroGIS no inicializado.`);
+        }
+      }
+    }, 200); // ⚡ Reducido a 200ms ya que la búsqueda local es casi instantánea
   }
 }
 
-window.iniciarEdicionDirecta = function(terreno) {
+window.iniciarEdicionDirecta = function (terrenoOrId) {
   if (map) map.closePopup();
+
+  let terreno = terrenoOrId;
+  if (typeof terrenoOrId === 'string' || typeof terrenoOrId === 'number') {
+    terreno = window.terrenosCache ? window.terrenosCache[terrenoOrId] : null;
+  }
+
+  if (!terreno) {
+    console.error("❌ [Editor] No se encontraron datos para el terreno:", terrenoOrId);
+    if (typeof DevTrace !== 'undefined' && DevTrace.error) {
+      DevTrace.error(`No se encontraron datos del terreno a editar (${terrenoOrId})`);
+    }
+    return;
+  }
+
   window.selectedLat = terreno.lat;
   window.selectedLng = terreno.lng;
   window.actualizarPinFantasmaDesdeFormulario();
@@ -309,7 +372,6 @@ function mostrarInstruccion(mensaje) {
   const toast = document.getElementById('loading-toast');
   const msgText = document.getElementById('toast-msg');
   if (toast && msgText) {
-    // 🟢 Asignamos clases de estado. CSS se encarga de centrar y mostrar
     toast.className = 'toast-container instruction-toast visible';
     msgText.innerText = mensaje;
   }
@@ -319,8 +381,7 @@ function mostrarToast(mensaje) {
   const toast = document.getElementById('loading-toast');
   const msgText = document.getElementById('toast-msg');
   if (toast && msgText) {
-    // 🟢 Solo la clase 'visible'
-    toast.className = 'toast-container visible'; 
+    toast.className = 'toast-container visible';
     msgText.innerText = mensaje;
   }
 }
@@ -360,14 +421,14 @@ function obtenerUbicacionActual() {
 function toggleRegla() {
   modoRegla = !modoRegla;
   const btn = document.getElementById('btn-ruler');
-  
+
   if (modoRegla) {
     if (window.modoAgregar) toggleAddMode();
-    if (btn) btn.classList.add('herramienta-activa'); // 🟢 JS asigna estado
+    if (btn) btn.classList.add('herramienta-activa');
     mostrarInstruccion("Haz clic en dos puntos del mapa para medir la distancia");
     limpiarRegla();
   } else {
-    if (btn) btn.classList.remove('herramienta-activa'); // 🟢 JS revoca estado
+    if (btn) btn.classList.remove('herramienta-activa');
     limpiarRegla();
     ocultarToast();
   }
