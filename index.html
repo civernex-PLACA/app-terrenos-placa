@@ -39,11 +39,14 @@
     <!-- Mapa de Leaflet -->
     <div id="map"></div>
     
-    <!-- Toast de Notificaciones y Cartel de Instrucciones -->
+    <!-- Cartel de Instrucciones (modo agregar / regla) -->
     <div id="loading-toast" class="toast-container">
       <span id="icono-spinner"></span>
       <span id="toast-msg">Procesando...</span>
     </div>
+
+    <!-- Pila de Notificaciones de Carga (pueden mostrarse varias a la vez) -->
+    <div id="toast-stack" class="toast-stack"></div>
   
 <!-- DOCK DE HERRAMIENTAS VECTORIAL (BARRA CONTINUA) -->
  
@@ -64,8 +67,12 @@
     <span id="icono-regla"></span>
   </button>
   
-<button id="btn-secciones" class="btn-herramienta" onclick="window.Poligonos.toggleSecciones()" title="Ver Secciones">
-  <span id="icono-secciones">🗺️</span>
+<button id="btn-secciones" class="dock-btn" onclick="window.Poligonos.toggleSecciones()" title="Ver Secciones">
+  <span id="icono-secciones"></span>
+</button>
+
+<button id="btn-overlay-parcelas" class="dock-btn" onclick="window.OverlayCatastro.toggleManual()" title="Ver Parcelas">
+  <span id="icono-overlay-parcelas"></span>
 </button>
 
   <button id="btn-satelite" class="dock-btn" title="Cambiar Vista Satelital / Mapa" onclick="toggleCapasMapa()">
@@ -180,6 +187,7 @@
   <script src="js/geocoding.js?v=4"></script>
   <script src="js/GeoJson.js"></script>
   <script src="js/capasDrive.js"></script>
+  <script src="js/overlayCatastro.js"></script>
   <script src="js/poligonos.js"></script>
   <script src="js/api.js?v=4"></script>
   <script src="js/editor.js"></script>
