@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <style>
+      body { font-family: 'Segoe UI', Arial, sans-serif; padding: 20px; color: #333; background: #f8f9fa; margin: 0; }
+      .container { background: white; padding: 20px; border-radius: 12px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); }
+      h3 { margin-top: 0; color: #1a73e8; }
+      .btn { background: #1a73e8; color: white; padding: 12px; border: none; border-radius: 8px; cursor: pointer; width: 100%; font-weight: bold; margin-top: 15px; transition: background 0.3s; }
+      .btn:hover { background: #1557b0; }
+      .btn:disabled { background: #ccc; cursor: not-allowed; }
+      input[type="file"] { margin-top: 10px; width: 100%; padding: 10px; border: 2px dashed #1a73e8; border-radius: 8px; background: #f4f8ff; box-sizing: border-box; cursor: pointer; }
+      #status { margin-top: 15px; font-size: 14px; font-weight: bold; text-align: center; }
+      .loading { color: #fbbc04; }
+      .success { color: #34a853; }
+      .error { color: #ea4335; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h3>Subir fotos: <?= idTerreno ?></h3>
+      <p style="font-size:13px; color:#666; margin-bottom: 15px;">Selecciona hasta 4 imágenes. Se renombrarán automáticamente.</p>
+      
+      <input type="file" id="fileInput" accept="image/*" multiple>
+      <button class="btn" id="btnSubir" onclick="subirArchivos()">Subir a Drive</button>
+      
+      <div id="status"></div>
+    </div>
+
+    <!-- Reemplaza el script de Subirfotos.html por este -->
+<script>
+  const idTerreno = "<?= idTerreno ?>";
+  
+  const toBase64 = file => new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = error => reject(error);
+  });
+
+  async function subirArchivos() {
+    const files = document.getElementById('fileInput').files;
+    if (files.length === 0) return alert("Selecciona al menos una foto.");
+    
+    // ✅ ELIMINADO: Ya no bloqueamos si eligen más de 4 fotos
+    
+    const btn = document.getElementById('btnSubir');
+    const status = document.getElementById('status');
+    btn.disabled = true;
+    
+    for (let i = 0; i < files.length; i++) {
+      status.className = "loading";
+      status.innerText = `Subiendo foto ${i+1} de ${files.length}... ⏳`;
+      
+      try {
+        let base64 = await toBase64(files[i]);
+        await new Promise((resolve, reject) => {
+          google.script.run
+            .withSuccessHandler(resolve)
+            .withFailureHandler(reject)
+            .subirImagenDrive(base64, idTerreno, files[i].type);
+        });
+      } catch (e) {
+        status.className = "error";
+        status.innerText = "❌ Error: " + e.message;
+        btn.disabled = false;
+        return;
+      }
+    }
+    
+    status.className = "success";
+    status.innerText = "¡Fotos subidas con éxito! ✅";
+    setTimeout(() => google.script.host.close(), 2000);
+  }
+</script>
+  </body>
+</html>

@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+      body { margin: 0; padding: 0; font-family: Arial, sans-serif; }
+      #map { height: 100vh; width: 100%; }
+      #loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 15px; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); z-index: 1000; text-align: center; font-weight: bold; color: #1a73e8; width: 80%;}
+      .custom-pin { background: transparent; border: none; }
+      .custom-pin svg { transition: all 0.3s ease; transform-origin: bottom center; }
+      @keyframes pulse { 0% { transform: scale(1.2); filter: drop-shadow(0 0 4px rgba(0,0,0, 0.5)); } 50% { transform: scale(1.5); filter: drop-shadow(0 0 10px rgba(0,0,0, 0.8)); } 100% { transform: scale(1.2); filter: drop-shadow(0 0 4px rgba(0,0,0, 0.5)); } }
+      .pin-selected { z-index: 1000 !important; }
+      .pin-selected svg { animation: pulse 1.5s infinite; }
+      .pin-dimmed { z-index: 400 !important; }
+      .pin-dimmed svg { opacity: 0.4; transform: scale(0.65); }
+      .pin-normal { z-index: 600 !important; }
+      .pin-normal svg { opacity: 1; transform: scale(1); }
+      .leaflet-popup-content { max-height: 350px; overflow-y: auto; width: 250px !important; }
+      .popup-data { margin: 2px 0; font-size: 13px; }
+    </style>
+  </head>
+  <body>
+    <div id="loading">📍 Cargando terrenos...</div>
+    <div id="map"></div>
+
+    <script>
+      let map;
+      let marcadoresGuardados = {}; 
+      let idSeleccionadoActual = "";
+      let ultimaActualizacion = "";
+      let timeoutSincronizacion;
+      
+      const osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' });
+      const googleSat = L.tileLayer('http://{s}.google.com/vt/lyrs=s&x={x}&y={y}&z={z}', { maxZoom: 20, subdomains:['mt0','mt1','mt2','mt3']});
+      
+      function initMap() {
+        map = L.map('map', { center: [-27.36708, -55.89608], zoom: 13, layers: [osmLayer] });
+        L.control.layers({"Mapa Base": osmLayer, "Satélite": googleSat}).addTo(map);
+        cargarDatos();
+        setInterval(chequearEstadoPlanilla, 1000);
+      }
+
+      function cargarDatos() {
+        const loadingDiv = document.getElementById('loading');
+        loadingDiv.style.display = 'block';
+        loadingDiv.innerHTML = "📍 Sincronizando...";
+        
+        timeoutSincronizacion = setTimeout(() => {
+          loadingDiv.innerHTML = "❌ Timeout: El servidor no responde.";
+        }, 15000);
+
+        google.script.run
+          .withSuccessHandler(res => {
+            clearTimeout(timeoutSincronizacion);
+            // ESCUDO DE SEGURIDAD: Entiende tanto listas simples como paquetes de datos
+            const datosSeguros = Array.isArray(res) ? res : res.marcadores;
+            mostrarMarcadores(datosSeguros);
+          })
+          .withFailureHandler(err => {
+            clearTimeout(timeoutSincronizacion);
+            loadingDiv.innerHTML = "❌ Error del Servidor: " + err.message;
+          })
+          .obtenerUbicaciones();
+      }
+
+      function crearIcono(color, claseCSS, tachado = false) {
+        const lineaTachado = tachado ? '<line x1="4" y1="4" x2="20" y2="20" stroke="black" stroke-width="3" stroke-linecap="round"/>' : '';
+        return L.divIcon({
+          className: `custom-pin ${claseCSS}`,
+          html: `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="${color}" width="30px" height="30px"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z" stroke="white" stroke-width="1.5"/>${lineaTachado}</svg>`,
+          iconSize: [30, 30], iconAnchor: [15, 30], popupAnchor: [0, -30]
+        });
+      }
+
+      function mostrarMarcadores(marcadores) {
+        document.getElementById('loading').style.display = 'none';
+        
+        for (let key in marcadoresGuardados) map.removeLayer(marcadoresGuardados[key].capa);
+        marcadoresGuardados = {};
+        
+        const bounds = [];
+        marcadores.forEach(function(m) {
+          let capaVisual;
+          const iconNormal = crearIcono(m.color, 'pin-normal', m.tachado);
+
+          if (m.poligono) {
+            try {
+              const coords = JSON.parse(m.poligono);
+              capaVisual = L.polygon(coords, {color: m.color, weight: 3, fillOpacity: 0.4}).addTo(map);
+            } catch(e) { capaVisual = L.marker([m.lat, m.lng], {icon: iconNormal}).addTo(map); }
+          } else {
+            capaVisual = L.marker([m.lat, m.lng], {icon: iconNormal}).addTo(map);
+          }
+          bounds.push([m.lat, m.lng]);
+          
+          capaVisual.bindPopup(`
+            <h3 style="margin:0 0 5px 0; color:${m.color};">${m.id} ${m.tachado ? '(DESCARTADO)' : ''}</h3>
+            <p class="popup-data"><b>Dirección:</b> ${m.direccion}</p>
+            <p class="popup-data"><b>Distrito:</b> ${m.distrito}</p>
+            <p class="popup-data"><b>Barrio:</b> ${m.barrio}</p>
+            <p class="popup-data"><b>Estado:</b> ${m.estado}</p>
+            <p class="popup-data"><b>Superficie:</b> ${m.supTotal ? m.supTotal + ' m²' : '-'}</p>
+            <hr style="margin: 8px 0; border: 0; border-top: 1px solid #dadce0;">
+            <p class="popup-data"><b>Propietario:</b> ${m.propietario || '-'}</p>
+            <p class="popup-data"><b>Contacto:</b> ${m.contacto || '-'}</p>
+            <p class="popup-data"><b>Vendedor:</b> ${m.vendedor || '-'}</p>
+            <p class="popup-data"><b>Notas:</b> ${m.notas || '-'}</p>
+            <br>
+            <a href="https://maps.google.com/maps?q=${m.lat},${m.lng}" target="_blank" style="background:#f1f3f4; color:#1a73e8; padding:8px; text-decoration:none; border-radius:8px; display:block; text-align:center; font-weight:bold; font-size:13px; border: 1px solid #dadce0;">📍 Abrir Ruta</a>
+          `);
+          
+          capaVisual.on('click', function() {
+            resaltarPin(m.id, false);
+            google.script.run.seleccionarFila(m.fila);
+          });
+          
+          marcadoresGuardados[m.id] = { capa: capaVisual, color: m.color, lat: m.lat, lng: m.lng, tachado: m.tachado };
+        });
+        
+        if(bounds.length > 0 && idSeleccionadoActual === "") map.fitBounds(bounds);
+        if(idSeleccionadoActual !== "") resaltarPin(idSeleccionadoActual, false);
+      }
+
+      function chequearEstadoPlanilla() {
+        google.script.run.withSuccessHandler(function(estado) {
+          if (!estado) return;
+          if (ultimaActualizacion !== "" && estado.update !== ultimaActualizacion) {
+            document.getElementById('loading').style.display = 'block';
+            cargarDatos();
+          }
+          ultimaActualizacion = estado.update;
+          if (estado.id && estado.id.startsWith("POS") && estado.id !== idSeleccionadoActual) {
+            resaltarPin(estado.id, true);
+          } else if ((!estado.id || !estado.id.startsWith("POS")) && idSeleccionadoActual !== "") {
+            restaurarPines();
+          }
+        }).getEstadoPlanilla();
+      }
+
+      function resaltarPin(id, moverCamara) {
+        idSeleccionadoActual = id;
+        for (let key in marcadoresGuardados) {
+          let m = marcadoresGuardados[key];
+          if (m.capa.setIcon) { 
+            if (key === id) { m.capa.setIcon(crearIcono(m.color, 'pin-selected', m.tachado)); if (moverCamara) map.panTo([m.lat, m.lng]); } 
+            else { m.capa.setIcon(crearIcono(m.color, 'pin-dimmed', m.tachado)); }
+          }
+        }
+      }
+
+      function restaurarPines() {
+        idSeleccionadoActual = "";
+        for (let key in marcadoresGuardados) {
+          let m = marcadoresGuardados[key];
+          if (m.capa.setIcon) m.capa.setIcon(crearIcono(m.color, 'pin-normal', m.tachado));
+        }
+      }
+
+      window.onload = initMap;
+    </script>
+  </body>
+</html>

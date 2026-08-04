@@ -1,0 +1,102 @@
+<style>
+  html, body { height: 100%; width: 100%; margin: 0; padding: 0; overflow: hidden; font-family: 'Segoe UI', Arial, sans-serif; background-color: #f8f9fa; }#pantalla-mapa { position: absolute; top: 0; left: 0; right: 0; bottom: 0; z-index: 0; }
+  #map { height: 100%; width: 100%; z-index: 1; }
+  
+  .right-menu { position: fixed; right: 15px; top: 50%; transform: translateY(-50%); display: flex; flex-direction: column; gap: 15px; z-index: 2000; }
+  .icon-btn { width: 50px; height: 50px; background: white; border-radius: 50%; box-shadow: 0 4px 12px rgba(0,0,0,0.15); display: flex; justify-content: center; align-items: center; cursor: pointer; color: #5f6368; transition: all 0.2s ease; border: 1px solid #f1f3f4; }
+  .icon-btn.active { color: white; background: #1a73e8; border-color: #1a73e8; }
+  .icon-btn svg { width: 24px; height: 24px; fill: currentColor; }
+  
+  #measure-result, #add-toast { display: none; position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: white; padding: 10px 20px; border-radius: 20px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); z-index: 2000; font-weight: bold; font-size: 15px; text-align: center; width: max-content; }
+  #measure-result { color: #1a73e8; border: 2px solid #1a73e8; }
+  #add-toast { background: #fbbc04; color: white; border: 2px solid #fbbc04; }
+
+  .form-group { margin-bottom: 15px; }
+  label { display: block; margin-bottom: 5px; font-weight: 600; color: #3c4043; font-size: 12px; text-transform: uppercase; }
+  input, select, textarea { width: 100%; padding: 12px; border: 1px solid #dadce0; border-radius: 8px; box-sizing: border-box; font-size: 14px; background: white; }
+  .row { display: flex; gap: 10px; }
+  .col { flex: 1; }
+  .btn-submit { background: #1a73e8; color: white; border: none; padding: 14px; width: 100%; border-radius: 25px; font-size: 15px; font-weight: bold; margin-top: 10px; cursor:pointer; box-shadow: 0 4px 10px rgba(26,115,232,0.3); }
+  
+  #loading { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: white; padding: 15px 25px; border-radius: 30px; box-shadow: 0 4px 15px rgba(0,0,0,0.2); z-index: 3000; text-align: center; color: #1a73e8; font-weight: bold; display: none; }
+  
+  .custom-pin { background: transparent; border: none; }
+  .custom-pin svg { transition: all 0.3s ease; transform-origin: bottom center; }
+  @keyframes pulse { 0% { transform: scale(1.2); filter: drop-shadow(0 0 4px rgba(0,0,0, 0.5)); } 50% { transform: scale(1.5); filter: drop-shadow(0 0 10px rgba(0,0,0, 0.8)); } 100% { transform: scale(1.2); filter: drop-shadow(0 0 4px rgba(0,0,0, 0.5)); } }
+  .pin-selected { z-index: 1000 !important; }
+  .pin-selected svg { animation: pulse 1.5s infinite; }
+  .pin-dimmed { z-index: 400 !important; }
+  .pin-dimmed svg { opacity: 0.4; transform: scale(0.65); }
+  .pin-normal { z-index: 600 !important; }
+  .pin-normal svg { opacity: 1; transform: scale(1); }
+  
+  .leaflet-popup-content { max-height: 350px; overflow-y: auto; width: 250px !important; }
+  .popup-data { margin: 2px 0; font-size: 13px; }
+  .user-dot { background-color: #4285F4; width: 16px; height: 16px; border-radius: 50%; border: 3px solid white; box-shadow: 0 0 8px rgba(0,0,0,0.5); }
+  
+  .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 3000; justify-content: center; align-items: center; }
+  .modal-content { background: #f8f9fa; padding: 20px; border-radius: 15px; width: 90%; max-width: 400px; max-height: 90vh; overflow-y: auto; }
+
+  /* ESTILOS GALERÍA FOTOS */
+  .photo-carousel { display: flex; overflow-x: auto; gap: 8px; margin-bottom: 10px; padding-bottom: 5px; }
+  .photo-carousel img { height: 90px; width: 90px; border-radius: 8px; flex-shrink: 0; cursor: pointer; object-fit: cover; border: 1px solid #ddd; }
+  #lightbox { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.9); z-index: 4000; justify-content: center; align-items: center; flex-direction: column; }
+  #lightbox img { max-width: 90%; max-height: 75vh; border-radius: 8px; box-shadow: 0 4px 15px rgba(0,0,0,0.5); }
+  .lightbox-close { position: absolute; top: 20px; right: 20px; color: white; font-size: 35px; cursor: pointer; line-height: 1; }
+  .lightbox-nav { display: flex; gap: 15px; margin-top: 15px; }
+  .lightbox-btn { background: #1a73e8; color: white; border: none; padding: 10px 20px; border-radius: 20px; cursor: pointer; font-weight: bold; font-size: 14px; }
+
+  /* ========================================== */
+  /* ESTILOS DEL MODO DESARROLLADOR             */
+  /* ========================================== */
+  .dev-panel { position: fixed; left: 15px; top: 50%; transform: translateY(-50%); background: rgba(0,0,0,0.85); color: #00ff00; padding: 15px; border-radius: 10px; z-index: 9999; font-family: monospace; border: 1px solid #00ff00; box-shadow: 0 4px 15px rgba(0,0,0,0.5); width: 160px; }
+  .dev-panel h4 { margin: 0 0 12px 0; color: #fff; text-align: center; border-bottom: 1px solid #555; padding-bottom: 8px; font-size: 14px; }
+  .dev-panel label { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; cursor: pointer; color: #ccc; text-transform: none; font-size: 12px; font-weight: normal; }
+  .dev-panel input[type="checkbox"] { margin: 0; width: 16px; height: 16px; cursor: pointer; accent-color: #ea4335; }
+  
+  /* ALERTA DE SUBIDA EN SEGUNDO PLANO */
+  #upload-toast { position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background: white; padding: 12px 25px; border-radius: 30px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); z-index: 9999; font-weight: bold; font-size: 14px; text-align: center; color: #1a73e8; border: 2px solid #1a73e8; display: none; white-space: nowrap; transition: all 0.3s; }
+  
+  /* CAJITA PARA ELIMINAR FOTOS */
+  .thumb-edit-box { position: relative; display: inline-block; }
+  .thumb-edit-box img { width: 65px; height: 65px; object-fit: cover; border-radius: 8px; border: 1px solid #ccc; }
+  .thumb-edit-box button { position: absolute; top: -5px; right: -5px; background: #ea4335; color: white; border: none; border-radius: 50%; width: 24px; height: 24px; font-size: 12px; cursor: pointer; box-shadow: 0 2px 5px rgba(0,0,0,0.3); display: flex; justify-content: center; align-items: center; }
+  
+  /* ==========================================
+     NOTIFICACIONES MODERNAS (TOP-LEFT)
+     ========================================== */
+  .toast-modern {
+    position: fixed;
+    top: 20px;
+    left: 20px; /* Esquina superior izquierda */
+    background: #ffffff;
+    padding: 12px 18px;
+    border-radius: 8px; /* Bordes suaves */
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    z-index: 10000;
+    font-size: 14px;
+    font-weight: 500;
+    color: #3c4043;
+    display: none; /* Oculto por defecto */
+    align-items: center;
+    gap: 12px;
+    border-left: 4px solid #1a73e8; /* Línea de acento a la izquierda */
+    transition: all 0.3s ease;
+  }
+
+  /* CÍRCULO DE CARGA LIGERO Y ESCALABLE */
+  .spinner-modern {
+    width: 16px;
+    height: 16px;
+    border: 3px solid #e8eaed; /* Círculo de fondo gris claro */
+    border-top: 3px solid #1a73e8; /* Borde superior azul */
+    border-radius: 50%;
+    /* La función steps(6) crea ese efecto de 6 frames que pediste */
+    animation: spin-step 0.8s steps(6) infinite; 
+  }
+
+  @keyframes spin-step {
+    100% { transform: rotate(360deg); }
+  }
+  
+</style>
