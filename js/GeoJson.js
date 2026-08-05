@@ -126,7 +126,11 @@ window.CatastroGIS = {
 
     const tInicio = performance.now();
 
-    const puntoClick = this.latLngToMercator(lat, lng);
+    // 🟢 capas/secciones.geojson (capa MAESTRA, solo para saber en qué
+    // sección cayó el clic) sigue viniendo en Mercator — no forma parte
+    // de la migración a capas enriquecidas (ver CLAUDE.md, aclaración de
+    // alcance). Por eso este punto de clic sigue necesitando Mercator.
+    const puntoClickMercator = this.latLngToMercator(lat, lng);
 
     // ----------------------------------------------------
     // PASO 1: Detectar Sección usando "Text"
@@ -144,7 +148,7 @@ window.CatastroGIS = {
         anillos = geom.coordinates[0];
       }
 
-      if (anillos.length > 0 && this.puntoEnPoligono(puntoClick, anillos)) {
+      if (anillos.length > 0 && this.puntoEnPoligono(puntoClickMercator, anillos)) {
         const props = feature.properties || {};
         seccionEncontrada = props.Text || props.SECCCION || props.SECCION || props.seccion;
         break;
@@ -177,6 +181,14 @@ window.CatastroGIS = {
       return null;
     }
 
+    // 🟢 Capa enriquecida (Catastro + Ordenamiento, ver CLAUDE.md "Diseño
+    // del motor renovado") — a diferencia de secciones.geojson de arriba,
+    // esta YA viene en lat/lng (el backend hace la conversión Gauss-
+    // Krüger una sola vez, al sincronizar). Por eso el punto de clic acá
+    // es directo [lng, lat], sin pasar por Mercator, y la geometría
+    // encontrada tampoco necesita convertirMultiPoligonoGPS.
+    const puntoClickLatLng = [lng, lat];
+
     for (const parcela of capaDetallada.features) {
       const geom = parcela.geometry;
       if (!geom) continue;
@@ -188,23 +200,21 @@ window.CatastroGIS = {
         anillos = geom.coordinates[0];
       }
 
-      if (anillos.length > 0 && this.puntoEnPoligono(puntoClick, anillos)) {
+      if (anillos.length > 0 && this.puntoEnPoligono(puntoClickLatLng, anillos)) {
         const tFin = performance.now();
         const props = parcela.properties || {};
 
         console.log(`🚀 [GIS Local] PASO 2 ÉXITO en ${(tFin - tInicio).toFixed(2)} ms!`);
-        console.log(`📌 IDGIS: ${props.IDGIS} | Distrito: ${props.DISTRITO}`);
-
-        const geoJsonGPS = this.convertirMultiPoligonoGPS(parcela.geometry);
+        console.log(`📌 cca/IDGIS: ${props.cca} | Distrito: ${props.DISTRITO}`);
 
         return {
-          idGis: props.IDGIS || "",
-          distrito: props.DISTRITO || props.DISTRITO_1 || "",
-          seccion: props.SECCCION || props.SECCION || seccionEncontrada || "",
+          idGis: props.cca || "",
+          distrito: props.DISTRITO || "",
+          seccion: props.SECCCION || seccionEncontrada || "",
           chacra: props.CHACRA || "",
           manzana: props.MANZANA || "",
           parcela: props.PARCELA || "",
-          geoJson: geoJsonGPS
+          geoJson: parcela.geometry
         };
       }
     }

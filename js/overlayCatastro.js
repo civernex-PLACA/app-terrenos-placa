@@ -92,15 +92,25 @@ window.OverlayCatastro = {
     if (!capaSecciones || !capaSecciones.features) return; // todavía no cargó
 
     const bounds = this.mapaRef.getBounds();
+
+    // 🟢 secciones.geojson (filtro grueso, paso 1) sigue en Mercator — no
+    // forma parte de la migración a capas enriquecidas (ver CLAUDE.md).
     const esquinaSO = window.CatastroGIS.latLngToMercator(bounds.getSouth(), bounds.getWest());
     const esquinaNE = window.CatastroGIS.latLngToMercator(bounds.getNorth(), bounds.getEast());
-    const viewportBbox = { minX: esquinaSO[0], minY: esquinaSO[1], maxX: esquinaNE[0], maxY: esquinaNE[1] };
+    const viewportBboxMercator = { minX: esquinaSO[0], minY: esquinaSO[1], maxX: esquinaNE[0], maxY: esquinaNE[1] };
+
+    // 🟢 Capa enriquecida (paso 2, filtro fino) ya viene en lat/lng — acá
+    // el viewport se compara directo en grados, sin Mercator.
+    // obtenerBBoxCacheado/calcularBBoxMercator no dependen de qué unidad
+    // sea, solo comparan los dos primeros números de cada coordenada —
+    // sirven igual para Mercator o para lat/lng, pese al nombre.
+    const viewportBboxLatLng = { minX: bounds.getWest(), minY: bounds.getSouth(), maxX: bounds.getEast(), maxY: bounds.getNorth() };
 
     // 1. Filtro grueso: qué secciones tocan el viewport (son pocas, 26 en total)
     const seccionesRelevantes = [];
     capaSecciones.features.forEach(feature => {
       const bbox = window.CatastroGIS.obtenerBBoxCacheado(feature);
-      if (!bbox || !window.CatastroGIS.bboxIntersecta(bbox, viewportBbox)) return;
+      if (!bbox || !window.CatastroGIS.bboxIntersecta(bbox, viewportBboxMercator)) return;
 
       const props = feature.properties || {};
       const numSeccion = props.Text || props.SECCCION || props.SECCION || props.seccion;
@@ -117,14 +127,14 @@ window.OverlayCatastro = {
 
       capa.features.forEach(parcela => {
         const bbox = window.CatastroGIS.obtenerBBoxCacheado(parcela);
-        if (!bbox || !window.CatastroGIS.bboxIntersecta(bbox, viewportBbox)) return;
+        if (!bbox || !window.CatastroGIS.bboxIntersecta(bbox, viewportBboxLatLng)) return;
 
-        const idgis = parcela.properties ? parcela.properties.IDGIS : null;
-        if (!idgis) return;
+        const cca = parcela.properties ? parcela.properties.cca : null;
+        if (!cca) return;
 
-        idsVistosAhora.add(idgis);
-        if (!this.poligonosDibujados[idgis]) {
-          this._dibujarPoligono(idgis, parcela);
+        idsVistosAhora.add(cca);
+        if (!this.poligonosDibujados[cca]) {
+          this._dibujarPoligono(cca, parcela);
         }
       });
     });
@@ -135,10 +145,10 @@ window.OverlayCatastro = {
     });
   },
 
-  // Recién acá se convierte la parcela de Mercator a lat/lng — solo para
-  // las que de verdad se van a dibujar, no para todas las candidatas.
+  // 🟢 La capa enriquecida ya viene en lat/lng — a diferencia de antes,
+  // acá no hace falta convertir nada, se dibuja la geometría tal cual.
   _dibujarPoligono: function (idgis, parcela) {
-    const geoJsonGPS = window.CatastroGIS.convertirMultiPoligonoGPS(parcela.geometry);
+    const geoJsonGPS = parcela.geometry;
     if (!geoJsonGPS) return;
 
     if (!this.capaOverlay) {
