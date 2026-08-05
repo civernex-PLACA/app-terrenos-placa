@@ -5,7 +5,7 @@
 window.idEdicionActual = null;
 
 const CAMPOS_FORMULARIO = [
-  'f-visitado', 'f-relevo', 'f-distrito', 'f-barrio', 'f-direccion', 'f-tipolote',
+  'f-visitado', 'f-relevo', 'f-distrito', 'f-idgis', 'f-barrio', 'f-direccion', 'f-tipolote',
   'f-estado', 'f-frente', 'f-fondo', 'f-agua', 'f-cloaca', 'f-propietario',
   'f-contacto', 'f-vendedor', 'f-notas'
 ];
@@ -33,14 +33,26 @@ window.limpiarFormulario = function () {
 // POBLADO Y LIMPIEZA DE CAMPOS DEL FORMULARIO
 // ==========================================
 
+// 🟢 Quita los acentos (tildes) de un texto para comparar sin que
+// "Sí" vs "SI" o "Distrito" vs "Dístrito" cuenten como distintos.
+// Construido por código de carácter (0x0300-0x036F, marcas diacríticas
+// combinantes que deja normalize('NFD')) en vez de escribir el rango
+// unicode literal en el código fuente, para que no dependa de cómo el
+// editor/la fuente representen esos caracteres invisibles.
+const RANGO_DIACRITICOS = new RegExp('[' + String.fromCharCode(0x0300) + '-' + String.fromCharCode(0x036F) + ']', 'g');
+function normalizarParaComparar(texto) {
+  return String(texto).toLowerCase().normalize('NFD').replace(RANGO_DIACRITICOS, '');
+}
+
 window.cargarDatosEnFormulario = function (terreno) {
   if (!terreno) return;
 
   // Mapa de ID del Input -> Valor en la propiedad del Terreno
   const mapaValores = {
-    'f-visitado': terreno.visitado || "No",
+    'f-visitado': terreno.visitado || "NO",
     'f-relevo': terreno.relevo || "",
     'f-distrito': terreno.distrito || "",
+    'f-idgis': terreno.colB || "",
     'f-barrio': terreno.barrio || "",
     'f-direccion': terreno.direccion || "",
     'f-tipolote': terreno.tipolote || "Entre Medianeras",
@@ -64,10 +76,15 @@ window.cargarDatosEnFormulario = function (terreno) {
     // Asignación inteligente según el tipo de Tag HTML
     if (el.tagName === 'SELECT') {
       let opcionEncontrada = false;
-      // Buscar coincidencia exacta o insensible a mayúsculas
+      // 🟢 Comparación insensible a mayúsculas Y a tildes: terrenos
+      // guardados antes de que las opciones se ajustaran a los valores
+      // exactos que exige la validación de la planilla (ej. "Sí" viejo
+      // vs "SI" nuevo en Agua/Cloaca) tienen que seguir encontrando su
+      // opción al editar, no quedar en blanco por el cambio.
+      const valorNormalizado = normalizarParaComparar(valor);
       for (let i = 0; i < el.options.length; i++) {
-        if (el.options[i].value.toLowerCase() === valor.toLowerCase() ||
-          el.options[i].text.toLowerCase() === valor.toLowerCase()) {
+        if (normalizarParaComparar(el.options[i].value) === valorNormalizado ||
+          normalizarParaComparar(el.options[i].text) === valorNormalizado) {
           el.selectedIndex = i;
           opcionEncontrada = true;
           break;
@@ -87,8 +104,8 @@ window.obtenerDatosFormulario = function () {
     id: window.idEdicionActual,
     lat: window.selectedLat,
     lng: window.selectedLng,
-    colB: getVal('f-colb', window.datosEdicionActualColB || ""),
-    visitado: getVal('f-visitado', 'No'), relevo: getVal('f-relevo'),
+    colB: getVal('f-idgis'),
+    visitado: getVal('f-visitado', 'NO'), relevo: getVal('f-relevo'),
     distrito: getVal('f-distrito'), barrio: getVal('f-barrio'),
     direccion: getVal('f-direccion'), tipolote: getVal('f-tipolote', 'Entre Medianeras'),
     estado: getVal('f-estado', 'Baldío'), frente: getVal('f-frente'),
@@ -115,10 +132,23 @@ window.procesarFormulario = async function () {
   const idToastGuardando = typeof window.mostrarToast === 'function' ? window.mostrarToast("Guardando datos...") : null;
 
   try {
-    console.log("⏳ [DEBUG] Enviando a Google Sheets...");
-    const idAsignado = await guardarTerrenoEnSheets(datos);
+    // 🟢 Backend atómico (Apps Script) en vez del PUT directo a Sheets
+    // desde el navegador: asigna el ID (mismo contador que ID Robusto,
+    // ya no adivinado por posición de fila) y escribe Hoja 1 + Hoja 2
+    // bajo un único lock del lado servidor — reemplaza
+    // guardarTerrenoEnSheets/guardarTerrenoNuevoConReintento/
+    // guardarGisEnHoja2 (ver CLAUDE.md, "Backend Apps Script", y
+    // js/api.js#guardarTerrenoViaBackendAtomico para el detalle de por
+    // qué la autenticación va en el cuerpo del POST, no en una cabecera).
+    if (window.datosGisTemporales) {
+      datos.datosGis = window.datosGisTemporales;
+    }
 
-    // 2️⃣ RAYOS X: ¿Qué respondió Google Sheets?
+    console.log("⏳ [DEBUG] Enviando al backend atómico...");
+    const idAsignado = await guardarTerrenoViaBackendAtomico(datos);
+    window.datosGisTemporales = null;
+
+    // 2️⃣ RAYOS X: ¿Qué respondió el backend?
     console.log("✅ [DEBUG] Respuesta del backend (ID):", idAsignado);
 
     if (idAsignado) {
@@ -140,7 +170,7 @@ window.procesarFormulario = async function () {
         console.warn("⚠️ [DEBUG] No se subieron fotos. Motivo: fotosParaSubir está vacío o falta la función.");
       }
     } else {
-      console.error("❌ [ERROR BACKEND]: guardarTerrenoEnSheets no devolvió un ID válido.");
+      console.error("❌ [ERROR BACKEND]: guardarTerrenoViaBackendAtomico no devolvió un ID válido.");
     }
 
     if (typeof window.ocultarToast === 'function') window.ocultarToast(idToastGuardando);

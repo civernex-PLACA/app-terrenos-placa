@@ -5,20 +5,81 @@ const SHEET_ID = "1gQTOwTrpCsltYv-VSZAApo9c_sF99fz8aY_j1qc4Pc0";
 const DRIVE_FOLDER_ID = "1aHzoGtmkosQfPsqje_R6MjlWGBxQFyvr";
 
 // ==========================================
+// 🟢 BACKEND ATÓMICO (Apps Script) — EN PRODUCCIÓN (2026-08-06), es lo
+// que llama formulario.js#procesarFormulario para guardar/editar
+// terrenos (ver CLAUDE.md, "Backend atómico — guardado de terrenos
+// migrado a Apps Script")
+// ==========================================
+// Reemplaza el patrón viejo de guardarTerrenoEnSheets (PUT directo +
+// verificación/reintento, más una escritura aparte sin lock a Hoja 2)
+// por una sola llamada a Backend_guardarTerreno
+// (backend-appscript/8_BackendAtomico.js): ahí el ID se asigna y la fila
+// se escribe (Hoja 1 + Hoja 2) bajo un único LockService, sin condición
+// de carrera posible.
+//
+// 🔴 Intento anterior (deployment "Ejecutar como: el usuario que accede" +
+// llamar con fetchConAuth, que agrega cabecera Authorization) confirmado
+// roto en el navegador real (2026-08-06): esa cabecera dispara un
+// preflight CORS (OPTIONS) que Apps Script responde con 405 sin
+// cabeceras CORS, sin forma de arreglarlo desde el código del script.
+//
+// Solución: el deployment corre "Ejecutar como: yo" + acceso "Anyone"
+// (sin cabeceras custom → sin preflight, igual que el webapp legacy), y
+// el token de Google se manda DENTRO del cuerpo JSON (no como cabecera)
+// — Backend_validarTokenYDominio (8_BackendAtomico.js) lo valida del
+// lado del servidor contra Google y confirma que la cuenta es del
+// dominio permitido antes de tocar la planilla. Por eso esta función usa
+// fetch() directo, NO fetchConAuth (que agregaría la cabecera que
+// justamente rompe todo esto).
+const BACKEND_ATOMICO_WEBAPP_URL = "https://script.google.com/macros/s/AKfycbw58WUjVdy4hQTDmGPSDTbu7b8OU0Sp2JI2cG94ZN7Y-jN1mIsBN8pnj3t0kATpi4vSzA/exec";
+
+window.guardarTerrenoViaBackendAtomico = async function (datos, _esReintento = false) {
+  const token = (typeof obtenerToken === 'function' ? obtenerToken() : null) || window.gapiToken;
+
+  const respuesta = await fetch(BACKEND_ATOMICO_WEBAPP_URL, {
+    method: 'POST',
+    // 🟢 text/plain a propósito (no application/json): mantiene el POST
+    // como solicitud "simple" (sin preflight) — doPost igual lo parsea
+    // con JSON.parse(e.postData.contents) sin importar qué Content-Type
+    // declaremos. Sin cabecera Authorization: el token va en el cuerpo.
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({
+      action: 'backendGuardarTerreno',
+      data: Object.assign({}, datos, { accessToken: token })
+    })
+  });
+
+  const resultado = await respuesta.json();
+
+  if (resultado.status !== 'success') {
+    const mensaje = resultado.message || '';
+    // 🟢 El backend antepone "TOKEN_..." al mensaje cuando el rechazo es
+    // por token faltante/vencido (no por dominio, ese no se arregla
+    // renovando) — mismo espíritu que el reintento-tras-401 de
+    // fetchConAuth, adaptado a que acá el error viene en el cuerpo, no
+    // en el status HTTP.
+    if (!_esReintento && mensaje.startsWith('TOKEN_') && typeof window.renovarToken === 'function') {
+      console.warn('⚠️ [Backend Atómico] Token rechazado, renovando y reintentando...');
+      const nuevoToken = await window.renovarToken();
+      if (nuevoToken) return window.guardarTerrenoViaBackendAtomico(datos, true);
+    }
+    throw new Error(mensaje || 'El backend atómico devolvió un error sin detalle.');
+  }
+
+  return resultado.data; // ID asignado
+};
+
+// ==========================================
 // CONSULTAR OPCIONES Y REGLAS DE LA PLANILLA
 // ==========================================
 async function obtenerEsquemaFormularioSheets() {
-  const token = obtenerToken();
-  if (!token) return null;
-
   try {
     const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}?includeGridData=true&ranges=${encodeURIComponent("'Relevamiento de Terrenos/Propietarios'!A5:AD6")}`;
 
-    const resp = await fetch(url, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
+    const resp = await window.fetchConAuth(url);
 
     if (!resp.ok) return null;
+
 
     const data = await resp.json();
     const rowData = data.sheets[0]?.data[0]?.rowData;
@@ -63,35 +124,23 @@ async function descargarYCruzarDatos(silencioso = false) {
     idToastSync = mostrarToast("Sincronizando datos...");
   }
 
-  const token = obtenerToken();
-  if (!token) return;
-
   try {
     const RANGO_DATOS = "'Relevamiento de Terrenos/Propietarios'!A5:AD";
     const RANGO_COORDENADAS = "'Coordenadas IDGIS'!A1:J";
 
     const [respuestaDatos, respuestaCoords] = await Promise.all([
-      fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(RANGO_DATOS)}`, { headers: { 'Authorization': `Bearer ${token}` } }),
-      fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(RANGO_COORDENADAS)}`, { headers: { 'Authorization': `Bearer ${token}` } })
+      window.fetchConAuth(`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(RANGO_DATOS)}`),
+      window.fetchConAuth(`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(RANGO_COORDENADAS)}`)
     ]);
 
-    // 🟢 INTERCEPTOR 401 AL DESCARGAR
-    if (respuestaDatos.status === 401 || respuestaCoords.status === 401) {
-      console.warn("⚠️ [API] Token expirado al sincronizar. Pausando y renovando...");
-      // 🟢 Cerramos el toast de este intento antes de reintentar: el
-      // reintento va a abrir el suyo propio (si corresponde), y si no
-      // lo cerráramos acá quedaría una tarjeta "Sincronizando datos..."
-      // pegada en la pila para siempre.
-      if (typeof ocultarToast === 'function') ocultarToast(idToastSync);
-      const nuevoToken = await window.renovarToken();
-      if (nuevoToken) {
-        return descargarYCruzarDatos(silencioso); // Reintento silencioso
-      } else {
+    if (!respuestaDatos.ok || !respuestaCoords.ok) {
+      if (respuestaDatos.status === 401 || respuestaCoords.status === 401) {
         alert("Sesión expirada. Por favor vuelve a iniciar sesión.");
         if (typeof cerrarSesion === 'function') cerrarSesion();
-        return;
       }
+      throw new Error("No se pudieron descargar los datos de la planilla.");
     }
+
 
     const jsonDatos = await respuestaDatos.json();
     const jsonCoords = await respuestaCoords.json();
@@ -234,242 +283,11 @@ async function descargarYCruzarDatos(silencioso = false) {
 }
 
 // ==========================================
-// GUARDAR O EDITAR TERRENO EN GOOGLE SHEETS
-// ==========================================
-
-// 🟢 Arma el array de columnas B→AD a partir de los datos del formulario.
-// Se usa tanto para editar (PUT a una fila puntual) como para dar de alta
-// un terreno nuevo, así los dos caminos escriben exactamente lo mismo.
-function construirFilaHoja1(datos, enlaceMapsActual) {
-  return [
-    datos.colB || datos.columnaB || "", // B
-    datos.visitado,     // C
-    datos.distrito,     // D
-    datos.barrio,       // E
-    datos.direccion,    // F
-    enlaceMapsActual,   // G
-    datos.tipolote,     // H
-    datos.estado,       // I
-    datos.frente,       // J
-    datos.fondo,        // K
-    "",                 // L (Superficie autocalculada)
-    datos.agua,         // M
-    datos.cloaca,       // N
-    datos.relevo,       // O
-    "", "", "", "", "", // P, Q, R, S, T
-    "",                 // U (Calificación autocalculada)
-    "",                 // V
-    datos.propietario,  // W
-    datos.contacto,     // X
-    "",                 // Y
-    datos.vendedor,     // Z
-    "", "", "",         // AA, AB, AC
-    datos.notas         // AD
-  ];
-}
-
-async function guardarTerrenoEnSheets(datos) {
-  const token = obtenerToken();
-
-  try {
-    const latFix = Number(datos.lat).toFixed(6);
-    const lngFix = Number(datos.lng).toFixed(6);
-    const enlaceMapsActual = `https://www.google.com/maps?q=${latFix},${lngFix}`;
-
-    // 🟢 Sin límite fijo de filas (antes cortaba en 1000; ahora Sheets
-    // devuelve solo las filas que realmente tienen datos)
-    const rangoCheck = "'Relevamiento de Terrenos/Propietarios'!A6:AD";
-    const urlCheck = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(rangoCheck)}`;
-
-    const respCheck = await fetch(urlCheck, { headers: { 'Authorization': `Bearer ${token}` } });
-
-    // 🟢 INTERCEPTOR 401 AL GUARDAR
-    if (respCheck.status === 401) {
-      console.warn("⚠️ [API] Token expirado al intentar guardar. Pausando y renovando...");
-      const idToastRenovar = typeof mostrarToast === 'function' ? mostrarToast("Renovando sesión de Google...") : null;
-
-      const nuevoToken = await window.renovarToken();
-      if (typeof ocultarToast === 'function') ocultarToast(idToastRenovar);
-
-      if (nuevoToken) {
-        console.log("✅ [API] Token renovado con éxito. Reintentando guardado...");
-        return guardarTerrenoEnSheets(datos);
-      } else {
-        alert("La sesión expiró y no pudo renovarse automáticamente. Por favor, vuelve a iniciar sesión (Tus datos podrían perderse).");
-        if (typeof cerrarSesion === 'function') cerrarSesion();
-        return null;
-      }
-    }
-
-    const jsonCheck = await respCheck.json();
-    const filasExistentes = jsonCheck.values || [];
-
-    // =========================================================
-    // 🟢 SISTEMA UNIFICADO DE BÚSQUEDA POR COORDENADAS
-    // =========================================================
-    let filaDestino = null;
-
-    // 1. Buscar coincidencia exacta de coordenadas en la Columna G (Modo Edición / Anti-duplicados)
-    for (let i = 0; i < filasExistentes.length; i++) {
-      let enlaceEnFila = filasExistentes[i][6]; // Columna G
-      if (enlaceEnFila) {
-        const match = String(enlaceEnFila).match(/q=(-?\d+\.\d+),(-?\d+\.\d+)/);
-        if (match) {
-          const latFila = Number(match[1]).toFixed(6);
-          const lngFila = Number(match[2]).toFixed(6);
-
-          if (latFila === latFix && lngFila === lngFix) {
-            filaDestino = 6 + i;
-            console.log(`📍 [Búsqueda] Terreno encontrado en fila ${filaDestino} por coordenadas exactas.`);
-            break;
-          }
-        }
-      }
-    }
-
-    // 🟢 CASO A: EDITAR UN TERRENO EXISTENTE (fila encontrada por coordenadas)
-    // Esto sigue siendo un PUT directo a una fila específica y conocida:
-    // no hay condición de carrera real acá porque dos ediciones al mismo
-    // terreno son un caso raro y, aun así, apuntan a la MISMA fila (no se
-    // pisan filas de terrenos distintos).
-    if (filaDestino) {
-      let idAsignadoAlTerreno = null;
-      const indiceFilaArray = filaDestino - 6;
-
-      if (filasExistentes[indiceFilaArray] && filasExistentes[indiceFilaArray][0]) {
-        idAsignadoAlTerreno = String(filasExistentes[indiceFilaArray][0]).trim();
-      } else {
-        idAsignadoAlTerreno = `POS${String(filaDestino - 5).padStart(3, '0')}`;
-      }
-
-      const filaHoja1 = construirFilaHoja1(datos, enlaceMapsActual);
-      const rangoFila = `'Relevamiento de Terrenos/Propietarios'!B${filaDestino}:AD${filaDestino}`;
-      const urlPut = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(rangoFila)}?valueInputOption=USER_ENTERED`;
-
-      const respuesta = await fetch(urlPut, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ values: [filaHoja1] })
-      });
-
-      const resultado = await respuesta.json();
-      if (resultado.error) throw new Error(resultado.error.message);
-
-      if (window.datosGisTemporales) {
-        window.guardarGisEnHoja2(idAsignadoAlTerreno, window.datosGisTemporales);
-        window.datosGisTemporales = null;
-      }
-
-      return idAsignadoAlTerreno;
-    }
-
-    // 🟢 CASO B: TERRENO NUEVO
-    // Volvemos a un PUT explícito a 'B{fila}:AD{fila}' (respeta las columnas
-    // al pie de la letra — a diferencia de "append", que en esta planilla
-    // desalineaba los datos porque tiene columnas vacías/autocalculadas
-    // intercaladas y confunde la detección automática de "tabla").
-    //
-    // Para no perder la protección contra la condición de carrera,
-    // verificamos después de escribir: releemos la fila y confirmamos
-    // que el contenido es el nuestro. Si otro usuario escribió ahí casi
-    // al mismo tiempo y nos pisó, lo detectamos y reintentamos con la
-    // siguiente fila libre (hasta 3 veces).
-    return await guardarTerrenoNuevoConReintento(datos, enlaceMapsActual, token, filasExistentes, 0);
-
-  } catch (error) {
-    console.error("Error al guardar/actualizar en Sheets:", error);
-    if (typeof removerPinFantasma === 'function') removerPinFantasma();
-    alert("Error al guardar en base de datos: " + error.message);
-    if (typeof ocultarToast === 'function') ocultarToast();
-    return null;
-  }
-}
-
-// ==========================================
-// ALTA DE TERRENO NUEVO CON VERIFICACIÓN + REINTENTO
-// (evita pisadas de datos entre usuarios guardando a la vez)
-// ==========================================
-async function guardarTerrenoNuevoConReintento(datos, enlaceMapsActual, token, filasExistentesIniciales, intento) {
-  const MAX_INTENTOS = 3;
-
-  // 1. Releer el estado actual de la planilla (excepto en el primer intento,
-  //    donde reutilizamos lo que ya se leyó para no gastar una llamada extra)
-  let filasExistentes = filasExistentesIniciales;
-  if (intento > 0) {
-    const rangoCheck = "'Relevamiento de Terrenos/Propietarios'!A6:AD";
-    const urlCheck = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(rangoCheck)}`;
-    const respCheck = await fetch(urlCheck, { headers: { 'Authorization': `Bearer ${token}` } });
-    const jsonCheck = await respCheck.json();
-    filasExistentes = jsonCheck.values || [];
-
-    // Pequeña espera aleatoria para que dos clientes en colisión no
-    // vuelvan a chocar exactamente en el mismo instante otra vez
-    await new Promise(r => setTimeout(r, 300 + Math.random() * 400));
-  }
-
-  // 2. Calcular la primera fila libre (misma lógica que la app original)
-  let filaDestino = 6;
-  for (let i = 0; i < filasExistentes.length; i++) {
-    let idEnFila = filasExistentes[i][0];       // Columna A (ID)
-    let visitadoEnFila = filasExistentes[i][2]; // Columna C (Visitado)
-
-    if (!idEnFila && !visitadoEnFila) {
-      filaDestino = 6 + i;
-      break;
-    }
-    filaDestino = 6 + i + 1;
-  }
-
-  const idAsignadoAlTerreno = `POS${String(filaDestino - 5).padStart(3, '0')}`;
-
-  // 3. Escribir en esa fila con PUT explícito (columnas exactas B:AD)
-  const filaHoja1 = construirFilaHoja1(datos, enlaceMapsActual);
-  const rangoFila = `'Relevamiento de Terrenos/Propietarios'!B${filaDestino}:AD${filaDestino}`;
-  const urlPut = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(rangoFila)}?valueInputOption=USER_ENTERED`;
-
-  await fetch(urlPut, {
-    method: 'PUT',
-    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ values: [filaHoja1] })
-  });
-
-  // 4. VERIFICACIÓN: releer esa misma fila y confirmar que el enlace de
-  // mapas (columna G, que incluye lat/lng exactas) es el nuestro. Si no
-  // coincide, alguien más escribió ahí primero -> colisión detectada.
-  const urlVerificar = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(`'Relevamiento de Terrenos/Propietarios'!G${filaDestino}`)}`;
-  const respVerificar = await fetch(urlVerificar, { headers: { 'Authorization': `Bearer ${token}` } });
-  const jsonVerificar = await respVerificar.json();
-  const enlaceGuardado = jsonVerificar.values?.[0]?.[0] || "";
-
-  if (enlaceGuardado !== enlaceMapsActual) {
-    console.warn(`⚠️ [API] Colisión detectada en fila ${filaDestino} (intento ${intento + 1}/${MAX_INTENTOS}). Reintentando...`);
-
-    if (intento + 1 >= MAX_INTENTOS) {
-      throw new Error("No se pudo guardar: varias personas guardaron terrenos al mismo tiempo. Probá guardar de nuevo.");
-    }
-    return await guardarTerrenoNuevoConReintento(datos, enlaceMapsActual, token, filasExistentes, intento + 1);
-  }
-
-  console.log(`✅ [API] Terreno nuevo guardado sin colisiones en fila ${filaDestino}.`);
-
-  if (window.datosGisTemporales) {
-    window.guardarGisEnHoja2(idAsignadoAlTerreno, window.datosGisTemporales);
-    window.datosGisTemporales = null;
-  }
-
-  return idAsignadoAlTerreno;
-}
-
-// ==========================================
 // GUARDAR FOTOS EN HOJA 2 (Coordenadas IDGIS)
 // ==========================================
 window.guardarIdsFotosEnHoja2 = async function (idTerreno, nuevosIdsFotos) {
   if (!nuevosIdsFotos || nuevosIdsFotos.length === 0) return;
 
-  const token = obtenerToken() || window.gapiToken;
   const sheetName = "Coordenadas IDGIS";
   const urlGet = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${sheetName}!A:G`;
 
@@ -481,8 +299,9 @@ window.guardarIdsFotosEnHoja2 = async function (idTerreno, nuevosIdsFotos) {
 
   while (filaEncontrada === -1 && intentos < 5) {
     try {
-      const res = await fetch(urlGet, { headers: { 'Authorization': `Bearer ${token}` } });
+      const res = await window.fetchConAuth(urlGet);
       const data = await res.json();
+
 
       if (data.values) {
         for (let i = 0; i < data.values.length; i++) {
@@ -516,89 +335,17 @@ window.guardarIdsFotosEnHoja2 = async function (idTerreno, nuevosIdsFotos) {
   const urlUpdate = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${sheetName}!G${filaEncontrada}?valueInputOption=USER_ENTERED`;
 
   try {
-    await fetch(urlUpdate, {
+    await window.fetchConAuth(urlUpdate, {
       method: 'PUT',
       headers: {
-        'Authorization': `Bearer ${token}`,
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({ values: [[stringFinal]] })
     });
     console.log("✅ IDs de fotos guardados en Hoja 2 exitosamente.");
+
   } catch (e) {
     console.error("Error al escribir los IDs en Hoja 2:", e);
   }
 };
 
-// ==========================================
-// NUEVO: GUARDAR METADATOS GIS EN HOJA 2
-// ==========================================
-window.guardarGisEnHoja2 = async function (idTerreno, datosGis) {
-  if (!datosGis || !datosGis.idGis || !datosGis.geoJson) return;
-
-  const token = obtenerToken() || window.gapiToken;
-  const sheetName = "Coordenadas IDGIS";
-  // Buscamos en la Columna A para encontrar la fila del terreno
-  const urlGet = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(sheetName)}!A:A`;
-
-  let filaEncontrada = -1;
-  let intentos = 0;
-
-  console.log(`Buscando ID ${idTerreno} en Hoja 2 para insertar polígono GIS...`);
-
-  // Se aplican reintentos en caso de que la fórmula de Google Sheets tarde en crear la fila
-  while (filaEncontrada === -1 && intentos < 5) {
-    try {
-      const res = await fetch(urlGet, { headers: { 'Authorization': `Bearer ${token}` } });
-      const data = await res.json();
-
-      if (data.values) {
-        for (let i = 0; i < data.values.length; i++) {
-          if (String(data.values[i][0]).trim() === String(idTerreno).trim()) {
-            filaEncontrada = i + 1;
-            break;
-          }
-        }
-      }
-    } catch (e) {
-      console.warn("Error al leer Hoja 2 para GIS:", e);
-    }
-
-    if (filaEncontrada === -1) {
-      await new Promise(r => setTimeout(r, 1000));
-      intentos++;
-    }
-  }
-
-  if (filaEncontrada === -1) {
-    console.error("No se encontró el ID en la Hoja 2 para guardar el polígono.");
-    return;
-  }
-
-  const idGisStr = String(datosGis.idGis);
-  const geoJsonStr = JSON.stringify(datosGis.geoJson);
-
-  // Escribir múltiples rangos simultáneamente sin afectar la columna G (fotos)
-  const urlBatch = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values:batchUpdate`;
-  const body = {
-    valueInputOption: "USER_ENTERED",
-    data: [
-      { range: `'Coordenadas IDGIS'!F${filaEncontrada}`, values: [[idGisStr]] },  // Columna 6
-      { range: `'Coordenadas IDGIS'!H${filaEncontrada}`, values: [[geoJsonStr]] } // Columna 8
-    ]
-  };
-
-  try {
-    await fetch(urlBatch, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(body)
-    });
-    console.log("✅ Polígono GIS guardado en Hoja 2 exitosamente.");
-  } catch (e) {
-    console.error("Error al escribir el polígono en Hoja 2:", e);
-  }
-};

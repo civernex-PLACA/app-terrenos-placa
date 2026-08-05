@@ -191,9 +191,9 @@ async function Fotos_enviarREST(base64Crudo, mimeType, fileName) {
   const multipartRequestBody = delimitador + 'Content-Type: application/json; charset=UTF-8\r\n\r\n' +
     JSON.stringify(metadata) + delimitador + 'Content-Type: ' + mimeType + '\r\nContent-Transfer-Encoding: base64\r\n\r\n' + base64Crudo + cierre;
 
-  const respuesta = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id&supportsAllDrives=true', {
+  const respuesta = await window.fetchConAuth('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id&supportsAllDrives=true', {
     method: 'POST',
-    headers: { 'Authorization': 'Bearer ' + window.gapiToken, 'Content-Type': 'multipart/related; boundary=' + boundary },
+    headers: { 'Content-Type': 'multipart/related; boundary=' + boundary },
     body: multipartRequestBody
   });
 
@@ -206,15 +206,16 @@ async function Fotos_enviarREST(base64Crudo, mimeType, fileName) {
     // empresa (necesario porque el <img> del carrusel carga la miniatura
     // sin token, así que el archivo igual tiene que ser accesible por link
     // — pero solo para el equipo, no para cualquiera en internet).
-    await fetch(`https://www.googleapis.com/drive/v3/files/${data.id}/permissions?supportsAllDrives=true`, {
+    await window.fetchConAuth(`https://www.googleapis.com/drive/v3/files/${data.id}/permissions?supportsAllDrives=true`, {
       method: 'POST',
-      headers: { 'Authorization': 'Bearer ' + window.gapiToken, 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ role: 'reader', type: 'domain', domain: 'placaestudio.com' })
     });
   } catch (e) {}
 
   return data.id; 
 }
+
 
 // ----------------------------------------------------------------
 // 3. GENERADOR DEL CARRUSEL PARA EL POPUP DEL MAPA

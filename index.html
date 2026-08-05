@@ -88,7 +88,7 @@
         <div class="form-grid">
           <div class="form-group">
             <label>Visitado</label>
-            <select id="f-visitado"><option value="No">No</option><option value="Si">Sí</option></select>
+            <select id="f-visitado"><option value="NO">No</option><option value="SI">Sí</option></select>
           </div>
           
           <div class="form-group">
@@ -103,6 +103,7 @@
           </div>
           
           <div class="form-group"><label>Distrito</label><input type="text" id="f-distrito"></div>
+          <div class="form-group"><label>ID GIS</label><input type="text" id="f-idgis"></div>
           <div class="form-group"><label>Barrio</label><input type="text" id="f-barrio"></div>
           
           <div class="form-group span-2"><label>Dirección / Calle</label><input type="text" id="f-direccion"></div>
@@ -127,13 +128,20 @@
           <div class="form-group"><label>Frente (m)</label><input type="text" id="f-frente" placeholder="Ej: 10,5"></div>
           <div class="form-group"><label>Fondo (m)</label><input type="text" id="f-fondo" placeholder="Ej: 30,0"></div>
           
-          <div class="form-group"><label>Agua</label><select id="f-agua"><option value=""></option><option value="Sí">Sí</option><option value="No">No</option></select></div>
-          <div class="form-group"><label>Cloaca</label><select id="f-cloaca"><option value=""></option><option value="Sí">Sí</option><option value="No">No</option></select></div>
-          
+          <div class="form-group"><label>Agua</label><select id="f-agua"><option value=""></option><option value="SI">Sí</option><option value="NO">No</option></select></div>
+          <div class="form-group"><label>Cloaca</label><select id="f-cloaca"><option value=""></option><option value="SI">Sí</option><option value="NO">No</option></select></div>
+
           <div class="form-group"><label>Propietario</label><input type="text" id="f-propietario"></div>
           <div class="form-group"><label>Contacto</label><input type="text" id="f-contacto" value="3764"></div>
-          
-          <div class="form-group span-2"><label>Vendedor</label><input type="text" id="f-vendedor"></div>
+
+          <div class="form-group span-2">
+            <label>Vendedor</label>
+            <select id="f-vendedor">
+              <option value=""></option>
+              <option value="Dueño Directo">Dueño Directo</option>
+              <option value="Inmobiliaria">Inmobiliaria</option>
+            </select>
+          </div>
           <div class="form-group span-2"><label>Notas</label><textarea id="f-notas"></textarea></div>
         </div>
 

@@ -13,14 +13,8 @@ window.CapasDrive = {
   SECCIONES_PRIORITARIAS: ['seccion01', 'seccion02', 'seccion03', 'seccion07', 'seccion08'],
   TAMANIO_TANDA_RESTO: 5,
 
-  // 1. Descarga masiva al iniciar sesión
+    // 1. Descarga masiva al iniciar sesión
   sincronizarCapas: async function() {
-    const token = window.gapiToken || localStorage.getItem('google_access_token');
-    if (!token) {
-      console.warn("⚠️ [CapasDrive] Sin token de Google para descargar capas.");
-      return;
-    }
-
     console.log("📡 [CapasDrive] Sincronizando capas desde Google Drive...");
 
     try {
@@ -31,11 +25,10 @@ window.CapasDrive = {
       // "files: []", como si no hubiera nada, aunque los archivos existan.
       const urlList = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name)&supportsAllDrives=true&includeItemsFromAllDrives=true`;
 
-      const resList = await fetch(urlList, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
+      const resList = await window.fetchConAuth(urlList);
 
       if (!resList.ok) throw new Error(`HTTP Error ${resList.status}`);
+
 
       const dataList = await resList.json();
       const archivos = dataList.files || [];
@@ -50,13 +43,13 @@ window.CapasDrive = {
       const archivosPrioritarios = archivos.filter(a => esPrioritaria(a.name));
       const archivosRestantes = archivos.filter(a => !esPrioritaria(a.name));
 
-      // 🟢 1. Tanda prioritaria: todas en simultáneo (son pocas, no debería
+            // 🟢 1. Tanda prioritaria: todas en simultáneo (son pocas, no debería
       // saturar ni siquiera una conexión de campo floja). Solo esta tanda
       // avisa con el toast — las de fondo bajan en silencio.
       const idToastCapas = typeof mostrarToast === 'function' ? mostrarToast("Descargando polígonos de catastro...") : null;
 
       await Promise.all(
-        archivosPrioritarios.map(archivo => this.descargarEInyectarGeoJSON(archivo.id, archivo.name, token))
+        archivosPrioritarios.map(archivo => this.descargarEInyectarGeoJSON(archivo.id, archivo.name))
       );
       console.log("⚡ [CapasDrive] Secciones prioritarias listas:", Object.keys(this.capasCargadas));
 
@@ -68,9 +61,10 @@ window.CapasDrive = {
       for (let i = 0; i < archivosRestantes.length; i += this.TAMANIO_TANDA_RESTO) {
         const tanda = archivosRestantes.slice(i, i + this.TAMANIO_TANDA_RESTO);
         await Promise.all(
-          tanda.map(archivo => this.descargarEInyectarGeoJSON(archivo.id, archivo.name, token))
+          tanda.map(archivo => this.descargarEInyectarGeoJSON(archivo.id, archivo.name))
         );
       }
+
 
       console.log("✅ [CapasDrive] Todas las capas en RAM listas:", Object.keys(this.capasCargadas));
 
@@ -79,16 +73,15 @@ window.CapasDrive = {
     }
   },
 
-  // 2. Inyección directa en RAM
-  descargarEInyectarGeoJSON: async function(fileId, fileName, token) {
+    // 2. Inyección directa en RAM
+  descargarEInyectarGeoJSON: async function(fileId, fileName) {
     const urlMedia = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&supportsAllDrives=true`;
 
     try {
-      const res = await fetch(urlMedia, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
+      const res = await window.fetchConAuth(urlMedia);
 
       if (!res.ok) return;
+
 
       const geoJsonData = await res.json();
       
@@ -97,6 +90,18 @@ window.CapasDrive = {
 
       this.capasCargadas[nombreClave] = geoJsonData;
       console.log(`⚡ [CapasDrive] Cargada en RAM: '${nombreClave}' (${geoJsonData.features?.length || 0} parcelas)`);
+
+      // 🟢 Sin esto, si el overlay gris ya estaba activo (modo agregar/editar
+      // abierto) pero esta sección todavía no había bajado, _recalcular()
+      // la saltea en silencio y no vuelve a intentar sola — se quedaba sin
+      // dibujar hasta que el usuario movía o hacía zoom en el mapa (lo cual
+      // sí dispara moveend/zoomend). Avisamos acá para que se actualice
+      // apenas la sección está lista, sin esperar un gesto del usuario.
+      // OverlayCatastro.actualizar() ya tiene debounce (150ms) y corta solo
+      // si el overlay no está activo, así que llamarlo siempre es barato.
+      if (window.OverlayCatastro && typeof window.OverlayCatastro.actualizar === 'function') {
+        window.OverlayCatastro.actualizar();
+      }
 
     } catch (e) {
       console.error(`❌ [CapasDrive] Error cargando ${fileName}:`, e);
