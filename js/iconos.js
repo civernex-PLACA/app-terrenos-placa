@@ -64,6 +64,11 @@ const Iconos = {
   parcelas: function() {
     return `<svg viewBox="0 0 24 24" class="svg-icon" fill="currentColor"><path d="M4 8h4V4H4v4zm6 12h4v-4h-4v4zm-6 0h4v-4H4v4zm0-6h4v-4H4v4zm6 0h4v-4h-4v4zm6-10v4h4V4h-4zm-6 4h4V4h-4v4zm6 6h4v-4h-4v4zm0 6h4v-4h-4v4z"/></svg>`;
   },
+  // 🟢 Línea quebrada tipo "calle" (distinta de la grilla de "capas"/
+  // "parcelas") para que se distinga a simple vista en el dock.
+  calles: function() {
+    return `<svg viewBox="0 0 24 24" class="svg-icon" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20L10 4M14 4l6 16M9 14h6"/></svg>`;
+  },
   dev: function() {
     return `<svg viewBox="0 0 24 24" class="svg-icon" fill="currentColor"><path d="M22.7 19l-9.1-9.1c.9-2.3.4-5-1.5-6.9-2-2-5-2.4-7.4-1.3L9 6 6 9 1.6 4.6C.4 7 1 10 3 12c1.9 1.9 4.6 2.4 6.9 1.5l9.1 9.1c.4.4 1 .4 1.4 0l2.3-2.3c.4-.4.4-1.1 0-1.3z"/></svg>`;
   },

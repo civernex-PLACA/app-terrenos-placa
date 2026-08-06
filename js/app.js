@@ -88,6 +88,11 @@ function cargarIconosUI() {
   if (contenedorIconoParcelas && typeof Iconos !== 'undefined' && Iconos.parcelas) {
     contenedorIconoParcelas.innerHTML = Iconos.parcelas();
   }
+
+  const contenedorIconoCalles = document.getElementById('icono-calles');
+  if (contenedorIconoCalles && typeof Iconos !== 'undefined' && Iconos.calles) {
+    contenedorIconoCalles.innerHTML = Iconos.calles();
+  }
 }
 
 async function iniciarApp() {
