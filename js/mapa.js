@@ -363,6 +363,24 @@ function onMapClick(e) {
 
             // Dibujar el perímetro rojo en el mapa
             if (window.Poligonos) window.Poligonos.dibujarFantasma(datosGIS.geoJson);
+
+            // 🔴 Sugerencia de frente (motorFrente.js) — SIN VALIDAR
+            // todavía, ver dev.js (devFlags.frenteSugerido, apagado por
+            // default) y CLAUDE.md ("Frente de lote"). Nunca autocompleta
+            // el campo Frente, solo informa.
+            const contenedorFrenteSugerido = document.getElementById('frente-sugerido-container');
+            if (typeof devFlags !== 'undefined' && devFlags.frenteSugerido &&
+                window.MotorFrente && window.CapasCalles && datosGIS.geoJson && contenedorFrenteSugerido) {
+              const anillo = window.MotorFrente._extraerAnilloExterior(datosGIS.geoJson);
+              const callesCercanas = window.CapasCalles.obtenerCallesDeSeccion(window.selectedLat, window.selectedLng);
+              if (anillo) {
+                const resultado = window.MotorFrente.clasificarLados(anillo, callesCercanas);
+                document.getElementById('frente-sugerido-texto').innerText = window.MotorFrente.formatearSugerencia(resultado);
+                contenedorFrenteSugerido.style.display = '';
+              }
+            } else if (contenedorFrenteSugerido) {
+              contenedorFrenteSugerido.style.display = 'none';
+            }
           } else {
             console.log(`[Mapa] No se encontró parcela en esta ubicación.`);
             window.datosGisTemporales = null;

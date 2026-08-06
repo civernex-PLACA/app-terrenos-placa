@@ -125,7 +125,15 @@
           <div class="form-group"><label>Frente (m)</label><input type="text" id="f-frente" placeholder="Ej: 10,5"></div>
           <div class="form-group"><label>Fondo (m)</label><input type="text" id="f-fondo" placeholder="Ej: 30,0"></div>
           <div class="form-group"><label>Superficie (aprox.)</label><input type="text" id="f-superficie-preview" placeholder="—" disabled></div>
-          
+
+          <!-- 🔴 Sugerencia de frente (motorFrente.js) — oculto por default,
+               solo aparece con devFlags.frenteSugerido=true (ver dev.js).
+               Informativo, nunca autocompleta el campo Frente. -->
+          <div class="form-group span-2" id="frente-sugerido-container" style="display:none;">
+            <label>🔴 Frente sugerido (sin validar)</label>
+            <div id="frente-sugerido-texto" class="frente-sugerido-texto">—</div>
+          </div>
+
           <div class="form-group"><label>Agua</label><select id="f-agua"><option value=""></option><option value="SI">Sí</option><option value="NO">No</option></select></div>
           <div class="form-group"><label>Cloaca</label><select id="f-cloaca"><option value=""></option><option value="SI">Sí</option><option value="NO">No</option></select></div>
 
@@ -195,6 +203,7 @@
   <script src="js/capasDrive.js"></script>
   <script src="js/overlayCatastro.js"></script>
   <script src="js/capasCalles.js"></script>
+  <script src="js/motorFrente.js"></script>
   <script src="js/poligonos.js"></script>
   <script src="js/api.js?v=4"></script>
   <script src="js/editor.js"></script>

@@ -5,7 +5,7 @@
 // 🟢 Subimos la versión para forzar que todos los clientes renueven la caché
 // con la nueva estrategia (importante: cambiar este número cada vez que se
 // modifique este archivo, para que el navegador descarte la caché vieja).
-const CACHE_NAME = 'terrenos-app-v8';
+const CACHE_NAME = 'terrenos-app-v9';
 
 // Archivos críticos que la app necesita para arrancar sin internet.
 // 🟢 Se agregó capasDrive.js, que faltaba en la lista original.
@@ -29,6 +29,7 @@ const ARCHIVOS_ESTATICOS = [
   './js/capasDrive.js',
   './js/overlayCatastro.js',
   './js/capasCalles.js',
+  './js/motorFrente.js',
   './js/poligonos.js',
   './js/iconos.js',
   './js/mapa.js',
