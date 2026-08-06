@@ -6,8 +6,10 @@
 // frente/medianera/ochava vive en el backend y todavía no está conectado
 // a nada automático. Esto es solo la referencia visual en el mapa.
 //
-// Activación 100% manual (botón del dock) — a diferencia del overlay gris
-// de parcelas, esta capa NO se prende sola al entrar a agregar/editar.
+// Sin botón propio: se activa/desactiva junto con OverlayCatastro (mismo
+// interruptor manual "Ver Parcelas" + el automático de agregar/editar) —
+// ver OverlayCatastro._sincronizarEstado(), que llama a activar()/
+// desactivar() acá cada vez que cambia su propio estado combinado.
 //
 // Mismo patrón de performance que OverlayCatastro (overlayCatastro.js):
 // - Solo se activa con zoom cercano (ZOOM_MINIMO).
@@ -16,10 +18,13 @@
 //   vista y saca las que quedaron afuera — nunca redibuja todo de cero.
 // - Un único <canvas> compartido para todas las calles dibujadas (GPU).
 //
-// Los archivos callesNN.geojson viven en la misma carpeta de Drive que
-// las secciones de parcelas — CapasDrive.sincronizarCapas() ya los baja
-// solo (la query no filtra por prefijo, agarra cualquier .geojson), caen
-// en capasCargadas['callesNN'] igual que 'seccionNN'.
+// Los archivos de calles por sección viven en la misma carpeta de Drive
+// que las secciones de parcelas — CapasDrive.sincronizarCapas() ya los
+// baja solo (la query no filtra por prefijo, agarra cualquier .geojson).
+// El nombre exacto de archivo no está confirmado del lado del backend,
+// así que en vez de asumir "callesNN" a secas, _resolverClaveCalles()
+// busca por coincidencia (contiene "calle" + el número de sección) —
+// ver ese método más abajo.
 // ==========================================
 
 window.CapasCalles = {
@@ -53,17 +58,17 @@ window.CapasCalles = {
     this.mapaRef.on('zoomend', () => this.actualizar());
   },
 
-  toggle: function () {
-    this.activo = !this.activo;
-    const btn = document.getElementById('btn-calles');
-    if (btn) btn.classList.toggle('herramienta-activa', this.activo);
+  activar: function () {
+    if (this.activo) return;
+    this.activo = true;
+    this.actualizar();
+  },
 
-    if (this.activo) {
-      this.actualizar();
-    } else {
-      clearTimeout(this.timeoutRecalculo);
-      this.limpiarTodo();
-    }
+  desactivar: function () {
+    if (!this.activo) return;
+    this.activo = false;
+    clearTimeout(this.timeoutRecalculo);
+    this.limpiarTodo();
   },
 
   limpiarTodo: function () {
@@ -77,6 +82,35 @@ window.CapasCalles = {
     if (!this.activo) return;
     clearTimeout(this.timeoutRecalculo);
     this.timeoutRecalculo = setTimeout(() => this._recalcular(), 150);
+  },
+
+  // 🟢 En vez de asumir un prefijo exacto ("callesNN"), busca entre las
+  // capas ya bajadas de Drive cuál corresponde a esa sección: cualquier
+  // clave que contenga "calle" y el número de sección con 2 dígitos.
+  // Así no depende de adivinar bien cómo nombra los archivos el backend
+  // (podría ser "callesNN", "calleNN", "callesSeccionNN", etc.) — se
+  // resuelve una sola vez por número de sección y queda en caché.
+  _cacheClaves: {},
+  _avisoNingunaClaveEncontrada: false,
+
+  _resolverClaveCalles: function (numPadded) {
+    if (this._cacheClaves[numPadded]) return this._cacheClaves[numPadded];
+    if (!window.CapasDrive || !window.CapasDrive.capasCargadas) return null;
+
+    const claves = Object.keys(window.CapasDrive.capasCargadas);
+    const encontrada = claves.find(clave => clave.includes('calle') && clave.includes(numPadded));
+
+    if (encontrada) {
+      this._cacheClaves[numPadded] = encontrada;
+    } else if (!this._avisoNingunaClaveEncontrada && !claves.some(c => c.includes('calle'))) {
+      // 🟢 Diagnóstico: si NINGUNA clave cargada contiene "calle", lo más
+      // probable es que el backend esté nombrando los archivos distinto
+      // a lo esperado — avisamos una sola vez con las claves reales
+      // disponibles para poder ajustar el filtro rápido.
+      this._avisoNingunaClaveEncontrada = true;
+      console.warn('⚠️ [CapasCalles] No se encontró ninguna capa de calles entre las cargadas de Drive. Claves disponibles:', claves);
+    }
+    return encontrada || null;
   },
 
   _recalcular: function () {
@@ -104,8 +138,8 @@ window.CapasCalles = {
     // lat/lng, mismo patrón que las parcelas.
     const viewportBboxLatLng = { minX: bounds.getWest(), minY: bounds.getSouth(), maxX: bounds.getEast(), maxY: bounds.getNorth() };
 
-    // 1. Filtro grueso: qué secciones tocan el viewport
-    const seccionesRelevantes = [];
+    // 1. Filtro grueso: qué números de sección tocan el viewport
+    const numerosSeccionRelevantes = [];
     capaSecciones.features.forEach(feature => {
       const bbox = window.CatastroGIS.obtenerBBoxCacheado(feature);
       if (!bbox || !window.CatastroGIS.bboxIntersecta(bbox, viewportBboxMercator)) return;
@@ -113,15 +147,16 @@ window.CapasCalles = {
       const props = feature.properties || {};
       const numSeccion = props.Text || props.SECCCION || props.SECCION || props.seccion;
       if (numSeccion) {
-        seccionesRelevantes.push('calles' + parseInt(numSeccion, 10).toString().padStart(2, '0'));
+        numerosSeccionRelevantes.push(parseInt(numSeccion, 10).toString().padStart(2, '0'));
       }
     });
 
     // 2. Filtro fino: solo dentro de esas secciones, qué calles tocan el viewport
     const clavesVistasAhora = new Set();
-    seccionesRelevantes.forEach(claveSeccion => {
-      const capa = window.CapasDrive && window.CapasDrive.capasCargadas ? window.CapasDrive.capasCargadas[claveSeccion] : null;
-      if (!capa || !capa.features) return; // esa sección de calles todavía no bajó de Drive
+    numerosSeccionRelevantes.forEach(numPadded => {
+      const claveSeccion = this._resolverClaveCalles(numPadded);
+      const capa = claveSeccion && window.CapasDrive && window.CapasDrive.capasCargadas ? window.CapasDrive.capasCargadas[claveSeccion] : null;
+      if (!capa || !capa.features) return; // esa sección de calles todavía no bajó de Drive (o no existe con ese nombre)
 
       capa.features.forEach((calle, indice) => {
         const bbox = window.CatastroGIS.obtenerBBoxCacheado(calle);

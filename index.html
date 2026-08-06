@@ -39,7 +39,7 @@
     <!-- Mapa de Leaflet -->
     <div id="map"></div>
     
-    <!-- Cartel de Instrucciones (modo agregar / regla) -->
+    <!-- Cartel de Instrucciones (modo agregar) -->
     <div id="loading-toast" class="toast-container">
       <span id="icono-spinner"></span>
       <span id="toast-msg">Procesando...</span>
@@ -63,20 +63,13 @@
     <span id="icono-gps"></span>
   </button>
 
-  <button id="btn-ruler" class="dock-btn" title="Medir Distancia" onclick="toggleRegla()">
-    <span id="icono-regla"></span>
-  </button>
-  
+
 <button id="btn-secciones" class="dock-btn" onclick="window.Poligonos.toggleSecciones()" title="Ver Secciones">
   <span id="icono-secciones"></span>
 </button>
 
-<button id="btn-overlay-parcelas" class="dock-btn" onclick="window.OverlayCatastro.toggleManual()" title="Ver Parcelas">
+<button id="btn-overlay-parcelas" class="dock-btn" onclick="window.OverlayCatastro.toggleManual()" title="Ver Parcelas y Calles">
   <span id="icono-overlay-parcelas"></span>
-</button>
-
-<button id="btn-calles" class="dock-btn" onclick="window.CapasCalles.toggle()" title="Ver Calles">
-  <span id="icono-calles"></span>
 </button>
 
   <button id="btn-satelite" class="dock-btn" title="Cambiar Vista Satelital / Mapa" onclick="toggleCapasMapa()">

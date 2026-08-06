@@ -257,10 +257,17 @@ html {
     border-top: 1px solid #f0f0f0;
   }
 
-  /* 🟢 A la izquierda de todo en modo vertical */
-  #btn-logout {
-    order: -1;
-  }
+  /* 🟢 Orden pedido para el modo vertical: Cerrar sesión bien a la
+     izquierda (aparte, no cuenta para centrar); de ahí, Cambiar mapa,
+     GPS, Añadir (centro real: 3ro de 5), Secciones, Parcelas+Calles. En
+     modo horizontal no se toca — ahí sigue el orden natural del HTML más
+     el "logout al final" de más abajo. */
+  #btn-logout { order: -1; }
+  #btn-satelite { order: 1; }
+  #btn-location { order: 2; }
+  #btn-add { order: 3; }
+  #btn-secciones { order: 4; }
+  #btn-overlay-parcelas { order: 5; }
 }
 
 /* 2. MODO HORIZONTAL / PC (Barra en borde derecho) */
@@ -343,19 +350,10 @@ html {
   background-color: var(--color-peligro) !important;
 }
 
-/* Cuando el botón Regla está activo */
-#btn-ruler.herramienta-activa {
-  background-color: #fef7e0 !important;
-}
-
-#btn-ruler.herramienta-activa svg {
-  fill: var(--color-alerta) !important;
-}
-
 /* 🟢 Resto de los botones "interruptor" del dock (Secciones, Satélite,
-   Parcelas): azul genérico al estar activos. Los de Agregar y Regla no
-   se ven afectados porque sus reglas de arriba son más específicas
-   (id + clase le gana a clase + clase). */
+   Parcelas): azul genérico al estar activos. El de Agregar no se ve
+   afectado porque su regla de arriba es más específica (id + clase le
+   gana a clase + clase). */
 .dock-btn.herramienta-activa {
   background-color: var(--color-primario) !important;
 }
