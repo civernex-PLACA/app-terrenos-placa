@@ -17,6 +17,16 @@ window.limpiarFormulario = function () {
     if (id === 'f-contacto') el.value = "3764";
     else if (el.tagName === 'SELECT') el.selectedIndex = 0;
     else el.value = "";
+
+    // 🟢 Limpia la sugerencia de frente/contrafrente (placeholder gris,
+    // data-sugerido y tooltip puestos por mapa.js) para que no quede
+    // pegada la sugerencia (o el aviso de "no determinado") del terreno
+    // anterior en un formulario nuevo.
+    if (el.dataset) delete el.dataset.sugerido;
+    if (id === 'f-frente' || id === 'f-fondo') {
+      el.placeholder = '';
+      el.title = '';
+    }
   });
 
   // 🟢 Superficie: solo informativa, no se manda al backend (no está en
@@ -115,7 +125,18 @@ window.cargarDatosEnFormulario = function (terreno) {
 };
 
 window.obtenerDatosFormulario = function () {
-  const getVal = (id, def = "") => document.getElementById(id) ? document.getElementById(id).value.trim() : def;
+  // 🟢 Si el relevador guardó sin completar un campo que tenía sugerencia
+  // de frente/contrafrente (motorFrente.js vía mapa.js), usamos el valor
+  // sugerido (data-sugerido) recién acá, al guardar — nunca antes, para
+  // que quede claro en pantalla que es una sugerencia y no algo que el
+  // relevador tipeó.
+  const getVal = (id, def = "") => {
+    const el = document.getElementById(id);
+    if (!el) return def;
+    const valor = el.value.trim();
+    if (!valor && el.dataset && el.dataset.sugerido) return el.dataset.sugerido;
+    return valor || def;
+  };
 
   return {
     id: window.idEdicionActual,

@@ -147,10 +147,10 @@ async function descargarYCruzarDatos(silencioso = false) {
     ]);
 
     if (!respuestaDatos.ok || !respuestaCoords.ok) {
-      if (respuestaDatos.status === 401 || respuestaCoords.status === 401) {
-        alert("Sesión expirada. Por favor vuelve a iniciar sesión.");
-        if (typeof cerrarSesion === 'function') cerrarSesion();
-      }
+      // 🟢 Si es 401, fetchConAuth (auth.js) ya intentó renovar el token
+      // solo y, si eso falló, ya volvió a la pantalla de login con su
+      // propio aviso (_volverAPantallaLogin) — no duplicamos alert/logout
+      // acá.
       throw new Error("No se pudieron descargar los datos de la planilla.");
     }
 

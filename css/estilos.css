@@ -43,18 +43,21 @@ html {
    ESTRUCTURA DE LA APP & LOGIN
    ========================================== */
 
-/* Pantalla de Login */
+/* Pantalla de Login — position:fixed + inset:0 para poder quedar flotando
+   ARRIBA de #app-content en la variante "popup" de abajo (token vencido
+   en medio del trabajo) sin sacar el mapa del flujo del documento. */
 #login-screen {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  position: fixed;
+  inset: 0;
   height: 100vh;
   background: var(--color-blanco);
   text-align: center;
   padding: 20px;
   z-index: 9999;
-  position: relative;
 }
 
 #login-screen h1 {
@@ -65,6 +68,33 @@ html {
 .login-subtitle {
   color: #666;
   margin-bottom: 20px;
+}
+
+/* 🟢 Variante "popup": el token se venció en medio del trabajo con el
+   mapa (ver auth.js, _volverAPantallaLogin). #app-content NO se oculta
+   en este caso — el mapa/formulario siguen visibles de fondo, atenuados
+   y difuminados (backdrop-filter, acelerado por GPU) en vez de tapados,
+   para que quede claro que el trabajo sigue ahí y no se perdió. */
+#login-screen.modo-popup {
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+#login-screen.modo-popup .login-card {
+  background: var(--color-blanco);
+  border-radius: 16px;
+  padding: 32px 24px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+  max-width: 320px;
+  width: 100%;
+}
+
+.login-mensaje-reautenticacion {
+  color: var(--color-texto-secundario);
+  font-size: 13px;
+  margin: -8px 0 20px;
+  max-width: 260px;
 }
 
 .btn-google {

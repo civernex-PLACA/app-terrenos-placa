@@ -10,14 +10,97 @@ const CLIENT_ID = "320507378351-hkvsd05ap7s30jpn0uv6k0q1domvde6f.apps.googleuser
 const SCOPES = "https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.readonly https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email";
 let tokenClient;
 
-function inicializarAuth() {
+async function inicializarAuth() {
   // Verificamos si ya hay un token guardado para saltar el login
   const token = obtenerToken();
-  if (token) {
-    // ✅ CORRECCIÓN: Inyectamos el token en window para que drive.js y api.js lo encuentren
-    window.gapiToken = token;
-    iniciarApp();
-    obtenerDatosUsuarioYConectarPresencia(token);
+  if (!token) return; // sin token: la pantalla de login ya está visible por default (CSS)
+
+  // ✅ CORRECCIÓN: Inyectamos el token en window para que drive.js y api.js lo encuentren
+  window.gapiToken = token;
+
+  // 🟢 Validamos el token guardado ANTES de abrir la app: un token viejo
+  // en localStorage no garantiza que siga siendo válido (pasó la hora,
+  // o el usuario revocó el acceso). Si `fetchConAuth` no lo puede
+  // renovar solo, nos quedamos en la pantalla de login en vez de abrir
+  // un mapa vacío sin pines y sin ninguna explicación de por qué.
+  const sesionValida = await obtenerDatosUsuarioYConectarPresencia(token);
+  if (!sesionValida) {
+    _volverAPantallaLogin();
+    return;
+  }
+
+  iniciarApp();
+  _programarRenovacionProactiva();
+}
+
+// 🟢 Renovación proactiva: los tokens de Google duran ~1h. Antes solo se
+// renovaban de forma "reactiva" (cuando una petición ya fallaba con 401,
+// ver fetchConAuth), lo que corta en medio de una acción del relevador
+// (ej. a mitad de subir fotos). Este timer pide uno nuevo cada 45 min
+// mientras la app sigue abierta, para que la renovación pase de fondo
+// entre acciones en vez de durante una. No reemplaza el reintento por
+// 401 (fetchConAuth lo sigue teniendo como red de seguridad) — sigue sin
+// poder evitar el re-login manual si la sesión de Google del navegador
+// en sí ya venció (ver CLAUDE.md, sección de autenticación) — en ese
+// caso, igual que en cualquier otra renovación fallida, se vuelve a la
+// pantalla de login (ver _volverAPantallaLogin).
+let _intervaloRenovacionProactiva = null;
+function _programarRenovacionProactiva() {
+  if (_intervaloRenovacionProactiva) return; // ya programado, no duplicar
+  _intervaloRenovacionProactiva = setInterval(async () => {
+    console.log("🔄 [Auth] Renovación proactiva de token (cada 45 min)...");
+    const nuevoToken = await window.renovarToken();
+    if (!nuevoToken) _volverAPantallaLogin();
+  }, 45 * 60 * 1000);
+}
+
+// 🟢 Punto único para "no hay token válido y no se pudo renovar solo":
+// limpia el token guardado, corta el timer de renovación proactiva, y
+// vuelve a mostrar la pantalla de login — sin importar si el fallo pasó
+// al abrir la app por primera vez, en medio de una sincronización de
+// fondo, o durante una acción del relevador. Antes cada lugar (o
+// ninguno) decidía qué hacer con un token muerto, y en varios casos no
+// se hacía nada visible (ver CLAUDE.md, "mapa vacío sin pines").
+//
+// 🟢 Dos variantes visuales (2026-08-06), según si el relevador ya
+// estaba trabajando con el mapa abierto o no:
+// - Mid-trabajo (#app-content ya estaba en 'block'): el mapa/formulario
+//   NO se ocultan — quedan de fondo, atenuados y difuminados
+//   (backdrop-filter, ver estilos.css ".modo-popup"), con el login
+//   flotando como popup encima. La idea es que quede claro que el
+//   trabajo sigue ahí, no un "se perdió todo y hay que arrancar de
+//   nuevo". Reemplaza al alert() bloqueante que había antes.
+// - Primera vez / token vencido antes de abrir la app (#app-content
+//   nunca llegó a mostrarse): pantalla completa de siempre, sin blur.
+//   Al loguearse de nuevo, `iniciarApp()` hace una carga completa
+//   (mapa, capas, pines) como cualquier primer arranque.
+function _volverAPantallaLogin() {
+  const pantallaLogin = document.getElementById('login-screen');
+  const contenidoApp = document.getElementById('app-content');
+  const mensajeReautenticacion = document.getElementById('login-mensaje-reautenticacion');
+
+  const veniaDeLaAppAbierta = contenidoApp && contenidoApp.style.display === 'block';
+
+  localStorage.removeItem('google_access_token');
+  window.gapiToken = null;
+  if (_intervaloRenovacionProactiva) {
+    clearInterval(_intervaloRenovacionProactiva);
+    _intervaloRenovacionProactiva = null;
+  }
+
+  if (pantallaLogin) {
+    pantallaLogin.style.display = '';
+    pantallaLogin.classList.toggle('modo-popup', veniaDeLaAppAbierta);
+  }
+  if (mensajeReautenticacion) {
+    mensajeReautenticacion.style.display = veniaDeLaAppAbierta ? '' : 'none';
+  }
+
+  // 🟢 En el caso popup, #app-content queda visible a propósito (el
+  // blur/atenuado de estilos.css lo cubre) — solo se oculta del todo en
+  // el caso de pantalla completa, igual que antes.
+  if (contenidoApp && !veniaDeLaAppAbierta) {
+    contenidoApp.style.display = 'none';
   }
 }
 
@@ -43,6 +126,7 @@ function prepararClienteGoogle() {
               // Si es un inicio de sesión normal por primera vez...
               iniciarApp();
               obtenerDatosUsuarioYConectarPresencia(tokenResponse.access_token);
+              _programarRenovacionProactiva();
             }
           } else {
             // Si falló la renovación
@@ -78,9 +162,26 @@ window.renovarToken = function () {
     }
     console.warn("🔄 [Auth] Solicitando nuevo token a Google...");
     prepararClienteGoogle();
-    tokenPromiseResolver = resolve; // Guardamos la resolución de la promesa
 
-    // Al no pasar 'prompt: consent', Google suele renovarlo silenciosamente 
+    // 🟢 Salvavidas: si Google nunca llama al callback (renovación
+    // "silenciosa" bloqueada por el navegador — cookies de terceros
+    // restringidas, PWA en el celular, ventana emergente bloqueada —
+    // esto pasaba y quedaba colgado para siempre: ni resolvía con token
+    // ni con null, y todo lo que esperaba esta promesa (fetchConAuth,
+    // la validación al abrir la app) se trababa sin ningún aviso —
+    // mapa vacío, sin pines, sin pantalla de login. A los 8s sin
+    // respuesta, damos la renovación por fallida.
+    let yaResolvio = false;
+    const resolverUnaVez = (valor) => {
+      if (yaResolvio) return;
+      yaResolvio = true;
+      tokenPromiseResolver = null;
+      resolve(valor);
+    };
+    tokenPromiseResolver = resolverUnaVez;
+    setTimeout(() => resolverUnaVez(null), 8000);
+
+    // Al no pasar 'prompt: consent', Google suele renovarlo silenciosamente
     // o con un popup que se cierra casi al instante.
     tokenClient.requestAccessToken({ prompt: '' });
   });
@@ -120,8 +221,7 @@ window.fetchConAuth = async function (url, options = {}) {
         respuesta = await fetch(url, options);
       } else {
         console.error("❌ [Auth] No se pudo renovar el token. Sesión expirada.");
-        // Opcional: podrías disparar un evento global o llamar a cerrarSesion()
-        // si la renovación falla definitivamente.
+        _volverAPantallaLogin();
       }
     }
 
@@ -133,7 +233,9 @@ window.fetchConAuth = async function (url, options = {}) {
 };
 
 
-// Obtiene Nombre, Email y Foto de perfil desde Google UserInfo para el módulo de Presencia
+// Obtiene Nombre, Email y Foto de perfil desde Google UserInfo para el
+// módulo de Presencia. Devuelve true/false — inicializarAuth lo usa para
+// decidir si el token guardado sigue siendo válido antes de abrir la app.
 async function obtenerDatosUsuarioYConectarPresencia(accessToken) {
   try {
     // 🟢 Usamos fetchConAuth (no fetch crudo) para que, si el token guardado
@@ -147,11 +249,13 @@ async function obtenerDatosUsuarioYConectarPresencia(accessToken) {
       if (typeof inicializarPresencia === 'function') {
         inicializarPresencia(usuarioGoogle);
       }
-    } else {
-      console.warn("No se pudieron obtener los datos de usuario de Google UserInfo.");
+      return true;
     }
+    console.warn("No se pudieron obtener los datos de usuario de Google UserInfo.");
+    return false;
   } catch (error) {
     console.error("Error al consultar perfil del usuario:", error);
+    return false;
   }
 }
 

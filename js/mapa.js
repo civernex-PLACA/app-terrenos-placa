@@ -364,23 +364,87 @@ function onMapClick(e) {
             // Dibujar el perímetro rojo en el mapa
             if (window.Poligonos) window.Poligonos.dibujarFantasma(datosGIS.geoJson);
 
-            // 🔴 Sugerencia de frente (motorFrente.js) — SIN VALIDAR
-            // todavía, ver dev.js (devFlags.frenteSugerido, apagado por
-            // default) y CLAUDE.md ("Frente de lote"). Nunca autocompleta
-            // el campo Frente, solo informa.
-            const contenedorFrenteSugerido = document.getElementById('frente-sugerido-container');
-            if (typeof devFlags !== 'undefined' && devFlags.frenteSugerido &&
-                window.MotorFrente && window.CapasCalles && datosGIS.geoJson && contenedorFrenteSugerido) {
-              const anillo = window.MotorFrente._extraerAnilloExterior(datosGIS.geoJson);
-              const callesCercanas = window.CapasCalles.obtenerCallesDeSeccion(window.selectedLat, window.selectedLng);
-              if (anillo) {
-                const resultado = window.MotorFrente.clasificarLados(anillo, callesCercanas);
-                document.getElementById('frente-sugerido-texto').innerText = window.MotorFrente.formatearSugerencia(resultado);
-                contenedorFrenteSugerido.style.display = '';
-              }
-            } else if (contenedorFrenteSugerido) {
-              contenedorFrenteSugerido.style.display = 'none';
+// 🟢 Sugerencia de frente/contrafrente (motorFrente.js) activada en
+// producción. NO escribe en .value (eso sería autocompletar sin que el
+// relevador lo note) — pone el valor sugerido como placeholder gris y
+// lo guarda en data-sugerido. El fallback real (usar el sugerido si el
+// relevador guardó sin completar el campo a mano) vive en
+// obtenerDatosFormulario (formulario.js), no acá.
+const contenedorFrenteSugerido = document.getElementById('frente-sugerido-container');
+const fFrenteInput = document.getElementById('f-frente');
+const fFondoInput = document.getElementById('f-fondo');
+
+// 🟢 valorMetros null = el algoritmo no pudo determinar este lado con
+// confianza. En ese caso NO ponemos ningún placeholder (no queremos un
+// número dudoso ahí, ni disfrazado de "sugerencia") — solo un tooltip
+// (title nativo) avisando por qué, si se pasa mensajeSinValor.
+function _setSugerencia(input, valorMetros, mensajeSinValor) {
+  if (!input) return;
+  if (valorMetros === null || valorMetros === undefined) {
+    input.placeholder = '';
+    input.title = mensajeSinValor || '';
+    delete input.dataset.sugerido;
+    return;
+  }
+  const texto = String(valorMetros).replace('.', ',');
+  input.dataset.sugerido = texto;
+  input.placeholder = `Sugerido: ${texto}`;
+  input.title = '';
+}
+
+if (window.MotorFrente && window.CapasCalles && datosGIS.geoJson && contenedorFrenteSugerido) {
+    const anillo = window.MotorFrente._extraerAnilloExterior(datosGIS.geoJson);
+    const callesCercanas = window.CapasCalles.obtenerCallesDeSeccion(window.selectedLat, window.selectedLng);
+
+    if (anillo) {
+        const resultado = window.MotorFrente.clasificarLados(anillo, callesCercanas);
+        document.getElementById('frente-sugerido-texto').innerText = window.MotorFrente.formatearSugerencia(resultado);
+        contenedorFrenteSugerido.style.display = '';
+
+        // El frente debe ser paralelo a la calle y estar cerca (confianza alta)
+        const frentes = resultado.filter(r => r.clasificacion === 'frente' && r.confianza === 'alta');
+        const cantLados = resultado.length;
+
+        if (frentes.length >= 2) {
+            // 🟥 Esquina / doble frente real (2+ lados de confianza alta):
+            // el campo "Contrafrente / Frente 2" recibe acá el segundo
+            // frente real, no un contrafrente geométrico.
+            frentes.sort((a, b) => b.largoMetros - a.largoMetros);
+
+            _setSugerencia(fFrenteInput, frentes[0].largoMetros);
+            _setSugerencia(fFondoInput, frentes[1].largoMetros);
+
+        } else if (frentes.length === 1) {
+            // Hay 1 solo Frente claro. Lo sugerimos siempre.
+            const frentePrincipal = frentes[0];
+            const posFrente = resultado.indexOf(frentePrincipal);
+
+            _setSugerencia(fFrenteInput, frentePrincipal.largoMetros);
+
+            // Evaluamos la forma estructural para decidir sobre el Contrafrente
+            if (cantLados === 4) {
+                // 🟩 Lote regular (4 lados): tomamos topológicamente el
+                // lado opuesto exacto (saltando 2 posiciones) como contrafrente.
+                const posFondo = (posFrente + 2) % 4;
+                const ladoFondo = resultado[posFondo];
+                _setSugerencia(fFondoInput, ladoFondo ? ladoFondo.largoMetros : null, 'No se pudo determinar el contrafrente automáticamente — completar a mano.');
+
+            } else {
+                // 🟨 Triangular (3 lados) o irregular (5+): sin
+                // contrafrente claro, no sugerimos nada en ese campo.
+                _setSugerencia(fFondoInput, null, 'No se pudo determinar el contrafrente automáticamente (lote no es de 4 lados) — completar a mano.');
             }
+        } else {
+            // ⬛ Sin frentes claros (ningún lado paralelo/cercano a una calle)
+            _setSugerencia(fFrenteInput, null, 'No se detectó ningún lado claramente paralelo a una calle cercana — completar a mano.');
+            _setSugerencia(fFondoInput, null, 'No se detectó ningún lado claramente paralelo a una calle cercana — completar a mano.');
+        }
+    }
+} else if (contenedorFrenteSugerido) {
+    contenedorFrenteSugerido.style.display = 'none';
+    _setSugerencia(fFrenteInput, null);
+    _setSugerencia(fFondoInput, null);
+}
           } else {
             console.log(`[Mapa] No se encontró parcela en esta ubicación.`);
             window.datosGisTemporales = null;

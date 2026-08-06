@@ -21,13 +21,19 @@
 </head>
 <body>
 
-  <!-- PANTALLA DE LOGIN -->
+  <!-- PANTALLA DE LOGIN — a pantalla completa por default (primera vez /
+       token vencido antes de abrir la app); auth.js le agrega la clase
+       "modo-popup" cuando el token se vence en medio del trabajo con el
+       mapa, para que quede flotando sobre el mapa en vez de taparlo. -->
   <div id="login-screen">
-    <h1>Terrenos App</h1>
-    <p class="login-subtitle">Acceso exclusivo Placa Estudio</p>
-    <button class="btn-google" onclick="iniciarSesion()">
-      <img src="https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg" alt="Google"> Iniciar sesión
-    </button>
+    <div class="login-card">
+      <h1>Terrenos App</h1>
+      <p class="login-subtitle">Acceso exclusivo Placa Estudio</p>
+      <p id="login-mensaje-reautenticacion" class="login-mensaje-reautenticacion" style="display:none;">Tu sesión expiró. Iniciá sesión de nuevo para seguir — tu trabajo sigue ahí.</p>
+      <button class="btn-google" onclick="iniciarSesion()">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg" alt="Google"> Iniciar sesión
+      </button>
+    </div>
   </div>
 
   <!-- CONTENIDO PRINCIPAL DE LA APLICACIÓN -->
@@ -122,13 +128,25 @@
             </select>
           </div>
           
-          <div class="form-group"><label>Frente (m)</label><input type="text" id="f-frente" placeholder="Ej: 10,5"></div>
-          <div class="form-group"><label>Fondo (m)</label><input type="text" id="f-fondo" placeholder="Ej: 30,0"></div>
+          <div class="form-group"><label>Frente (m)</label><input type="text" id="f-frente"></div>
+          <div class="form-group"><label>Contrafrente / Frente 2 (m)</label><input type="text" id="f-fondo"></div>
           <div class="form-group"><label>Superficie (aprox.)</label><input type="text" id="f-superficie-preview" placeholder="—" disabled></div>
 
-          <!-- 🔴 Sugerencia de frente (motorFrente.js) — oculto por default,
-               solo aparece con devFlags.frenteSugerido=true (ver dev.js).
-               Informativo, nunca autocompleta el campo Frente. -->
+          <!-- 🟢 Sugerencia de frente/contrafrente (motorFrente.js) —
+               activa siempre que hay polígono + calles cercanas, SIN
+               gate de devFlags (el flag en dev.js quedó sin uso acá).
+               NO escribe el valor en el campo: lo muestra como
+               placeholder gris (id="f-frente"/"f-fondo", ver mapa.js) —
+               NUNCA un placeholder de ejemplo, solo el dato sugerido de
+               verdad (o vacío + tooltip si el algoritmo no pudo
+               determinarlo). Si el relevador no completa el campo a
+               mano, el valor sugerido recién se usa al guardar
+               (fallback en obtenerDatosFormulario, formulario.js) y
+               pasa a ser el dato real que se manda a la planilla. El
+               campo "Contrafrente / Frente 2" recibe tanto el
+               contrafrente (lado opuesto en un lote de 4 lados) como el
+               segundo frente real en un lote de esquina — mismo campo,
+               dos significados posibles según el caso. -->
           <div class="form-group span-2" id="frente-sugerido-container" style="display:none;">
             <label>🔴 Frente sugerido (sin validar)</label>
             <div id="frente-sugerido-texto" class="frente-sugerido-texto">—</div>

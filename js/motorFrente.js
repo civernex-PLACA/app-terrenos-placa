@@ -8,15 +8,16 @@
 // algoritmo, mantener las dos copias en sync a mano, no hay build
 // system en este proyecto que comparta código entre ambos lados.
 //
-// 🔴 SIN VALIDAR TODAVÍA (ver CLAUDE.md, "Frente de lote"): el criterio
-// ángulo+distancia está validado con 4 lotes reales del lado del
-// backend, pero no se corrió `MotorFrente_probarConTerrenoReal` contra
-// el resto de los casos de HALLAZGOS_mapa_calles.md. Por eso esta
-// sugerencia queda gateada detrás de `devFlags.frenteSugerido` (default
-// false, ver dev.js) — invisible para los relevadores hasta que se
-// valide y se decida activarla a propósito. Mientras tanto, sirve para
-// validar visualmente contra casos reales directo en el mapa, en vez de
-// solo con las funciones de prueba del backend.
+// 🔴 SIN VALIDAR FORMALMENTE TODAVÍA (ver CLAUDE.md, "Frente de lote"):
+// el criterio ángulo+distancia está validado con 4 lotes reales del
+// lado del backend, pero no se corrió `MotorFrente_probarConTerrenoReal`
+// contra el resto de los casos de HALLAZGOS_mapa_calles.md. Ya NO está
+// gateada por `devFlags.frenteSugerido` (ese flag quedó sin uso, ver
+// mapa.js) — corre siempre para terrenos nuevos, pero el resultado se
+// muestra como placeholder gris en los campos Frente/Contrafrente
+// (nunca se escribe en .value desde acá) y solo se usa de verdad si el
+// relevador guarda sin completar el campo a mano (fallback en
+// obtenerDatosFormulario, formulario.js).
 // ==========================================
 
 window.MotorFrente = {
@@ -69,13 +70,67 @@ window.MotorFrente = {
 
     const puntosParcela = anilloParcela.map(function (p) { return aMetros(p[0], p[1]); });
 
-    const lados = [];
+    // 🟢 NUEVO: Extraemos los segmentos válidos y calculamos su ángulo absoluto
+    const segmentosIniciales = [];
     for (let i = 0; i < puntosParcela.length; i++) {
       const a = puntosParcela[i];
       const b = puntosParcela[(i + 1) % puntosParcela.length];
       const largo = Math.hypot(b.x - a.x, b.y - a.y);
       if (largo < ladoMinimo) continue;
-      lados.push({ indice: i, a: a, b: b, largo: largo });
+      
+      // Ángulo en grados del segmento (0 a 360)
+      let anguloAbsoluto = Math.atan2(b.y - a.y, b.x - a.x) * 180 / Math.PI;
+      if (anguloAbsoluto < 0) anguloAbsoluto += 360;
+      
+      segmentosIniciales.push({ indice: i, a: a, b: b, largo: largo, anguloAbs: anguloAbsoluto });
+    }
+
+    // 🟢 NUEVO: Fusionamos los segmentos que son colineales para armar los lados reales
+    const lados = [];
+    if (segmentosIniciales.length > 0) {
+      lados.push(segmentosIniciales[0]);
+
+      for (let i = 1; i < segmentosIniciales.length; i++) {
+        const segActual = segmentosIniciales[i];
+        const ladoPrevio = lados[lados.length - 1];
+
+        // Calculamos la diferencia angular
+        let diff = Math.abs(segActual.anguloAbs - ladoPrevio.anguloAbs);
+        if (diff > 180) diff = 360 - diff; // Normalizamos para que no supere 180
+
+        // Si la diferencia es menor o igual a 5 grados, son la misma línea recta
+        if (diff <= 5) {
+          // Fusionamos: el punto final 'b' del lado previo pasa a ser el de este segmento
+          ladoPrevio.b = segActual.b;
+          // Recalculamos la longitud real desde el inicio 'a' hasta el nuevo fin 'b'
+          ladoPrevio.largo = Math.hypot(ladoPrevio.b.x - ladoPrevio.a.x, ladoPrevio.b.y - ladoPrevio.a.y);
+          
+          // Actualizamos el ángulo del vector largo fusionado
+          let nuevoAngulo = Math.atan2(ladoPrevio.b.y - ladoPrevio.a.y, ladoPrevio.b.x - ladoPrevio.a.x) * 180 / Math.PI;
+          if (nuevoAngulo < 0) nuevoAngulo += 360;
+          ladoPrevio.anguloAbs = nuevoAngulo;
+        } else {
+          // Si hay un quiebre mayor a 5 grados, se consolida como un nuevo lado
+          lados.push(segActual);
+        }
+      }
+
+      // Cerrar el ciclo: verificamos si el último lado se fusiona con el primero
+      if (lados.length > 1) {
+        const primerLado = lados[0];
+        const ultimoLado = lados[lados.length - 1];
+        
+        let diff = Math.abs(ultimoLado.anguloAbs - primerLado.anguloAbs);
+        if (diff > 180) diff = 360 - diff;
+
+        if (diff <= 5) {
+          // Extendemos el inicio del primer lado hacia donde empezó el último
+          primerLado.a = ultimoLado.a; 
+          primerLado.largo = Math.hypot(primerLado.b.x - primerLado.a.x, primerLado.b.y - primerLado.a.y);
+          // Borramos el último lado del array porque ya se incorporó al primero
+          lados.pop(); 
+        }
+      }
     }
 
     const segmentosCalles = [];
