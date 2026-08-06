@@ -664,6 +664,21 @@ html {
   resize: vertical;
 }
 
+/* 🔴 Sugerencia de frente (motorFrente.js, sin validar) — mismo look
+   que un input disabled, pero es un <div> (texto variable, no editable
+   ni por el usuario ni por JS vía .value). */
+.frente-sugerido-texto {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid var(--color-bordes);
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 13px;
+  color: var(--color-texto-mutado);
+  background: #fef7e0;
+  box-sizing: border-box;
+}
+
 .span-2 {
   grid-column: span 2;
 }

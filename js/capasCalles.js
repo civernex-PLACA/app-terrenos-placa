@@ -179,6 +179,39 @@ window.CapasCalles = {
     });
   },
 
+  // 🟢 Calles de la sección donde cae (lat, lng) — usado por
+  // motorFrente.js para la sugerencia de frente (ver dev.js,
+  // devFlags.frenteSugerido). Mismo criterio "Paso 1" que
+  // CatastroGIS.obtenerDatosPorCoordenada (point-in-polygon contra
+  // secciones.geojson en Mercator) — no se reinventa la detección de
+  // sección, solo se resuelve la clave de calles para esa sección.
+  obtenerCallesDeSeccion: function (lat, lng) {
+    if (!window.CatastroGIS || !window.CatastroGIS.capaSeccionesMaestra) return [];
+
+    const capaSecciones = window.CatastroGIS.capaSeccionesMaestra;
+    const puntoMercator = window.CatastroGIS.latLngToMercator(lat, lng);
+
+    let numSeccion = null;
+    for (const feature of capaSecciones.features) {
+      const geom = feature.geometry;
+      if (!geom) continue;
+      let anillos = [];
+      if (geom.type === 'MultiPolygon') anillos = geom.coordinates[0][0];
+      else if (geom.type === 'Polygon') anillos = geom.coordinates[0];
+      if (anillos.length > 0 && window.CatastroGIS.puntoEnPoligono(puntoMercator, anillos)) {
+        const props = feature.properties || {};
+        numSeccion = props.Text || props.SECCCION || props.SECCION || props.seccion;
+        break;
+      }
+    }
+    if (!numSeccion) return [];
+
+    const numPadded = parseInt(numSeccion, 10).toString().padStart(2, '0');
+    const claveSeccion = this._resolverClaveCalles(numPadded);
+    const capa = claveSeccion && window.CapasDrive && window.CapasDrive.capasCargadas ? window.CapasDrive.capasCargadas[claveSeccion] : null;
+    return capa && capa.features ? capa.features : [];
+  },
+
   _dibujarCalle: function (clave, calle) {
     const geoJsonGPS = calle.geometry;
     if (!geoJsonGPS) return;
