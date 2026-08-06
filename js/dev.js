@@ -12,12 +12,13 @@ const DevModule = {
     sync: true,
     tags: true,
     fotos: true,
-    // 🔴 Sugerencia de frente (motorFrente.js) — apagada a propósito
-    // hasta validar el algoritmo contra los casos reales de
-    // HALLAZGOS_mapa_calles.md (ver CLAUDE.md, "Frente de lote").
-    // Activar a mano acá (o desde la consola: devFlags.frenteSugerido = true)
-    // para probarla visualmente en el mapa mientras se valida.
-    frenteSugerido: false
+    // 🟡 Sugerencia de frente (motorFrente.js) — activada 2026-08-06 a
+    // pedido explícito, ANTES de correr la validación formal contra los
+    // casos reales de HALLAZGOS_mapa_calles.md (ver CLAUDE.md, "Frente
+    // de lote"). El resultado en pantalla queda etiquetado "sin
+    // validar" a propósito — usar esto en campo también sirve como
+    // validación en vivo mientras se decide si el criterio aguanta.
+    frenteSugerido: true
   },
 
   backups: {},
