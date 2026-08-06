@@ -37,6 +37,39 @@ window.CatastroGIS = {
     return [x, y];
   },
 
+  // 🟢 Área aproximada de un polígono (m²) — SOLO para la vista previa
+  // de Superficie en el formulario al agregar/editar un terreno, antes
+  // de guardar. El valor real que queda guardado lo calcula el backend
+  // con el motor Gauss-Krüger de precisión (Limpieza_calcularAreaPoligono,
+  // 7_ModuloLimpieza.js — "NO TOCAR esta fórmula"), reusando la misma
+  // proyección que ya está validada contra el catastro real. Acá, en
+  // cambio, se usa una proyección plana simple (equirectangular: cada
+  // grado de lng se escala por el coseno de la latitud, sin las
+  // correcciones de Gauss-Krüger) a propósito — es mucho más rápida y
+  // el error que introduce a la escala de un lote individual (decenas
+  // de metros) es despreciable para una vista previa informativa.
+  calcularSuperficieAproximada: function(geometry) {
+    let anillo = null;
+    if (geometry && geometry.type === 'Polygon') anillo = geometry.coordinates[0];
+    else if (geometry && geometry.type === 'MultiPolygon') anillo = geometry.coordinates[0][0];
+    if (!anillo || anillo.length < 3) return null;
+
+    const R = 6378137; // radio terrestre (mismo valor que ya usa mercatorToLatLng)
+    const latRef = anillo[0][1] * Math.PI / 180;
+    const puntos = anillo.map(par => ({
+      x: (par[0] * Math.PI / 180) * R * Math.cos(latRef),
+      y: (par[1] * Math.PI / 180) * R
+    }));
+
+    let sumaShoelace = 0;
+    for (let i = 0; i < puntos.length; i++) {
+      const actual = puntos[i];
+      const siguiente = puntos[(i + 1) % puntos.length];
+      sumaShoelace += actual.x * siguiente.y - siguiente.x * actual.y;
+    }
+    return Math.round(Math.abs(sumaShoelace) / 2);
+  },
+
   // 🟢 Rectángulo (bounding box) en Mercator de una geometría GeoJSON.
   // Sirve para saber rápido si una parcela "puede" estar en el viewport,
   // sin tener que revisar punto por punto.

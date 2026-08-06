@@ -19,6 +19,11 @@ window.limpiarFormulario = function () {
     else el.value = "";
   });
 
+  // 🟢 Superficie: solo informativa, no se manda al backend (no está en
+  // CAMPOS_FORMULARIO) — se limpia aparte.
+  const fSuperficiePreview = document.getElementById('f-superficie-preview');
+  if (fSuperficiePreview) fSuperficiePreview.value = "";
+
   // 🟢 Limpieza manual del buffer de fotos y vista previa
   window.fotosParaSubir = [];
   const contenedorPrevio = document.getElementById('vista-previa-fotos');
@@ -95,6 +100,18 @@ window.cargarDatosEnFormulario = function (terreno) {
       el.value = valor;
     }
   });
+
+  // 🟢 Superficie: al editar un terreno existente, ya tiene el valor
+  // real calculado por el backend guardado en Hoja 1 columna L
+  // (terreno.sup) — no hace falta recalcular nada acá, es más preciso
+  // que la aproximación local. Al agregar un terreno nuevo, la completa
+  // mapa.js apenas se detecta el polígono al hacer clic (todavía no
+  // existe un valor guardado para ese caso).
+  const fSuperficiePreview = document.getElementById('f-superficie-preview');
+  if (fSuperficiePreview) {
+    const sup = String(terreno.sup || "").trim();
+    fSuperficiePreview.value = sup ? `${sup} m²` : "";
+  }
 };
 
 window.obtenerDatosFormulario = function () {
@@ -158,8 +175,8 @@ window.procesarFormulario = async function () {
           const idsFotosSubidas = await window.Fotos_procesarYSubirADrive(idAsignado);
           console.log("☁️ [DEBUG] Fotos subidas con éxito. IDs:", idsFotosSubidas);
 
-          if (idsFotosSubidas.length > 0 && typeof window.guardarIdsFotosEnHoja2 === 'function') {
-            await window.guardarIdsFotosEnHoja2(idAsignado, idsFotosSubidas);
+          if (idsFotosSubidas.length > 0 && typeof window.guardarIdsFotosViaBackendAtomico === 'function') {
+            await window.guardarIdsFotosViaBackendAtomico(idAsignado, idsFotosSubidas);
             console.log("🔗 [DEBUG] IDs de fotos vinculados en Sheets.");
           }
         } catch (fotoError) {

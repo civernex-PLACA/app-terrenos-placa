@@ -390,9 +390,9 @@ window.ProcesarColaFotos = async function() {
     for (let foto of pendientes) {
       try {
         const idSubida = await Fotos_enviarREST(foto.datosCrudos, foto.tipoMime, foto.nombreArchivo);
-        if (idSubida && typeof window.guardarIdsFotosEnHoja2 === 'function') {
-          // Si la subió bien a Drive, la enlazamos en Sheets (Hoja 2)
-          await window.guardarIdsFotosEnHoja2(foto.idTerreno, [idSubida]);
+        if (idSubida && typeof window.guardarIdsFotosViaBackendAtomico === 'function') {
+          // Si la subió bien a Drive, la enlazamos vía backend atómico
+          await window.guardarIdsFotosViaBackendAtomico(foto.idTerreno, [idSubida]);
           
           // Y la borramos de la memoria del celular
           await window.ColaFotos.eliminar(foto.id_unico);

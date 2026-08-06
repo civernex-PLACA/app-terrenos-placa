@@ -114,6 +114,19 @@ function extraerOpcionesValidacion(celda) {
   return null;
 }
 
+// 🟢 Extrae lat/lng del Enlace de Maps (columna G de Hoja 1) en vez de
+// leerlas de Hoja 2 (ver CLAUDE.md, "Migración de Hoja 2 al archivo de
+// backup" → Lat/Lng). Mismo formato que ya deja 4_ConversorLinks.js al
+// normalizar cualquier link pegado (maps.google.com/maps?q=<lat>,<lng>)
+// y mismo regex que ya usa el backend para leerlo de vuelta
+// (extraerCoordsPorRegex en 9_IdRobusto.js) — no es una variante nueva.
+function extraerLatLngDeEnlace(enlace) {
+  if (!enlace) return null;
+  const match = String(enlace).match(/q=(-?\d+\.\d+),(-?\d+\.\d+)/);
+  if (!match) return null;
+  return { lat: parseFloat(match[1]), lng: parseFloat(match[2]) };
+}
+
 // ==========================================
 // DESCARGAR Y DIBUJAR PINES EN EL MAPA
 // ==========================================
@@ -148,7 +161,10 @@ async function descargarYCruzarDatos(silencioso = false) {
     const filasDatos = jsonDatos.values || [];
     const filasCoords = jsonCoords.values || [];
 
-    // 1. Memorizar Coordenadas desde Hoja 2
+    // 1. Memorizar fotos/GeoJSON desde Hoja 2 — lat/lng YA NO sale de acá
+    // (ver extraerLatLngDeEnlace arriba), pero fotosIds/geoJsonStr todavía
+    // no se migraron al lado de lectura del frontend, así que la
+    // consulta a Hoja 2 se mantiene por ahora.
     let diccionarioCoords = {};
 
     for (let i = 1; i < filasCoords.length; i++) {
@@ -157,8 +173,6 @@ async function descargarYCruzarDatos(silencioso = false) {
       if (idCrudo) {
         let idLimpio = String(idCrudo).trim();
         diccionarioCoords[idLimpio] = {
-          lat: filaC[1],
-          lng: filaC[2],
           fotosIds: filaC[6] || "",
           geoJsonStr: filaC[7] || "" // 🟢 NUEVO: Columna H
         };
@@ -190,17 +204,20 @@ async function descargarYCruzarDatos(silencioso = false) {
       if (!idCrudo) continue;
 
       let idLimpio = String(idCrudo).trim();
-      const coordsTerreno = diccionarioCoords[idLimpio];
-      if (!coordsTerreno) continue;
+      // fotosIds/geoJsonStr siguen viniendo de Hoja 2 — si un terreno no
+      // tiene fila ahí todavía (recién creado, sincronización en curso),
+      // igual se puede dibujar el pin con las coordenadas del Enlace,
+      // solo que sin polígono/fotos hasta que aparezca.
+      const coordsTerreno = diccionarioCoords[idLimpio] || { fotosIds: "", geoJsonStr: "" };
 
-      let latStr = String(coordsTerreno.lat || "");
-      let lngStr = String(coordsTerreno.lng || "");
-      if (!latStr.includes("-") || !lngStr.includes("-")) continue;
+      const enlaceEnFila = fila[6]; // Columna G (Enlace)
+      const coords = extraerLatLngDeEnlace(enlaceEnFila);
+      if (!coords) continue; // sin coordenadas válidas en el Enlace (ej. caso legacy DMS de POS001)
 
       idsVistosAhora.add(idLimpio);
 
-      let lat = parseFloat(latStr.replace(',', '.'));
-      let lng = parseFloat(lngStr.replace(',', '.'));
+      let lat = coords.lat;
+      let lng = coords.lng;
 
       let colorLeido = (fila[20]) ? String(fila[20]).trim().toUpperCase() : "";
 
@@ -283,69 +300,48 @@ async function descargarYCruzarDatos(silencioso = false) {
 }
 
 // ==========================================
-// GUARDAR FOTOS EN HOJA 2 (Coordenadas IDGIS)
+// GUARDAR IDs DE FOTOS (backend atómico — Backend_agregarFotos)
 // ==========================================
-window.guardarIdsFotosEnHoja2 = async function (idTerreno, nuevosIdsFotos) {
+// 🟢 Reemplaza el guardarIdsFotosEnHoja2 viejo (2026-08-06): ese hacía
+// el ciclo leer→modificar→escribir directo desde el navegador contra
+// Sheets, sin ningún lock — si dos relevadores subían fotos al mismo
+// terreno casi al mismo tiempo, el segundo PUT pisaba al primero y se
+// perdían fotos en silencio (ver CLAUDE.md, "Concurrencia al subir
+// fotos"). Ahora el navegador solo manda "estas son las fotos nuevas"
+// y el backend (Backend_agregarFotos, 8_BackendAtomico.js) hace el
+// merge bajo un LockService — mismo patrón/mismo motivo que
+// guardarTerrenoViaBackendAtomico un poco más arriba en este archivo
+// (texto plano sin cabecera Authorization, token en el cuerpo).
+window.guardarIdsFotosViaBackendAtomico = async function (idTerreno, nuevosIdsFotos, _esReintento = false) {
   if (!nuevosIdsFotos || nuevosIdsFotos.length === 0) return;
 
-  const sheetName = "Coordenadas IDGIS";
-  const urlGet = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${sheetName}!A:G`;
-
-  let filaEncontrada = -1;
-  let intentos = 0;
-  let idsActualesColG = "";
-
-  console.log(`Buscando ID ${idTerreno} en Hoja 2 para insertar fotos...`);
-
-  while (filaEncontrada === -1 && intentos < 5) {
-    try {
-      const res = await window.fetchConAuth(urlGet);
-      const data = await res.json();
-
-
-      if (data.values) {
-        for (let i = 0; i < data.values.length; i++) {
-          if (String(data.values[i][0]).trim() === String(idTerreno).trim()) {
-            filaEncontrada = i + 1;
-            idsActualesColG = data.values[i][6] || "";
-            break;
-          }
-        }
-      }
-    } catch (e) {
-      console.warn("Error al leer Hoja 2:", e);
-    }
-
-    if (filaEncontrada === -1) {
-      console.log("Hoja 2 aún no tiene el ID, reintentando en 1s...");
-      await new Promise(r => setTimeout(r, 1000));
-      intentos++;
-    }
-  }
-
-  if (filaEncontrada === -1) {
-    console.error("No se encontró el ID en la Hoja 2. Las fotos están en Drive pero no se enlazaron.");
-    return;
-  }
-
-  let arrayIds = idsActualesColG ? idsActualesColG.split(',').map(id => id.trim()).filter(id => id !== "") : [];
-  arrayIds = arrayIds.concat(nuevosIdsFotos);
-  let stringFinal = arrayIds.join(',');
-
-  const urlUpdate = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${sheetName}!G${filaEncontrada}?valueInputOption=USER_ENTERED`;
+  const token = (typeof obtenerToken === 'function' ? obtenerToken() : null) || window.gapiToken;
 
   try {
-    await window.fetchConAuth(urlUpdate, {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ values: [[stringFinal]] })
+    const respuesta = await fetch(BACKEND_ATOMICO_WEBAPP_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({
+        action: 'backendAgregarFotos',
+        data: { idTerreno, idsFotos: nuevosIdsFotos, accessToken: token }
+      })
     });
-    console.log("✅ IDs de fotos guardados en Hoja 2 exitosamente.");
 
+    const resultado = await respuesta.json();
+
+    if (resultado.status !== 'success') {
+      const mensaje = resultado.message || '';
+      if (!_esReintento && mensaje.startsWith('TOKEN_') && typeof window.renovarToken === 'function') {
+        console.warn('⚠️ [Backend Atómico] Token rechazado guardando fotos, renovando y reintentando...');
+        const nuevoToken = await window.renovarToken();
+        if (nuevoToken) return window.guardarIdsFotosViaBackendAtomico(idTerreno, nuevosIdsFotos, true);
+      }
+      throw new Error(mensaje || 'El backend atómico devolvió un error sin detalle.');
+    }
+
+    console.log("✅ IDs de fotos guardados vía backend atómico:", resultado.data);
   } catch (e) {
-    console.error("Error al escribir los IDs en Hoja 2:", e);
+    console.error("Error al guardar IDs de fotos vía backend atómico:", e);
   }
 };
 

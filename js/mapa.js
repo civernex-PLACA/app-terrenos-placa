@@ -360,17 +360,14 @@ function onMapClick(e) {
             const fIdGis = document.getElementById('f-idgis');
             if (fIdGis && datosGIS.idGis) fIdGis.value = datosGIS.idGis;
 
-            const fSeccion = document.getElementById('f-seccion');
-            if (fSeccion && datosGIS.seccion) fSeccion.value = datosGIS.seccion;
-
-            const fChacra = document.getElementById('f-chacra');
-            if (fChacra && datosGIS.chacra) fChacra.value = datosGIS.chacra;
-
-            const fManzana = document.getElementById('f-manzana');
-            if (fManzana && datosGIS.manzana) fManzana.value = datosGIS.manzana;
-
-            const fParcela = document.getElementById('f-parcela');
-            if (fParcela && datosGIS.parcela) fParcela.value = datosGIS.parcela;
+            // 🟢 Superficie: solo vista previa, cálculo local aproximado
+            // (ver CatastroGIS.calcularSuperficieAproximada, GeoJson.js)
+            // — el valor real lo calcula el backend al guardar.
+            const fSuperficiePreview = document.getElementById('f-superficie-preview');
+            if (fSuperficiePreview && datosGIS.geoJson) {
+              const areaAprox = window.CatastroGIS.calcularSuperficieAproximada(datosGIS.geoJson);
+              fSuperficiePreview.value = areaAprox ? `${areaAprox} m² (aprox.)` : "";
+            }
 
             // Dibujar el perímetro rojo en el mapa
             if (window.Poligonos) window.Poligonos.dibujarFantasma(datosGIS.geoJson);
