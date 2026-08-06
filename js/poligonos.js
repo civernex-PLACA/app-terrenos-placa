@@ -13,6 +13,15 @@ window.Poligonos = {
   init: function(mapa) {
     this.mapaRef = mapa;
     if (this.mapaRef && !this.capaPermanentesGroup) {
+      // 🟢 Pane propio, por arriba del 'paneCatastroCompleto' de
+      // OverlayCatastro y de 'paneCalles' de CapasCalles (ver esos
+      // módulos) — los polígonos ya relevados siempre tienen que quedar
+      // por encima de la guía gris de parcelas y de las calles, sin
+      // depender de cuál canvas se creó primero.
+      if (!this.mapaRef.getPane('panePoligonosRelevados')) {
+        this.mapaRef.createPane('panePoligonosRelevados');
+        this.mapaRef.getPane('panePoligonosRelevados').style.zIndex = 403;
+      }
       this.capaPermanentesGroup = L.layerGroup().addTo(this.mapaRef);
     }
   },
@@ -85,7 +94,7 @@ window.Poligonos = {
     // <canvas>. Acá el volumen puede ser mayor que en el overlay (son
     // TODOS los terrenos con GIS cargado, no solo lo visible en pantalla).
     if (!this.renderer) {
-      this.renderer = L.canvas({ padding: 0.5 });
+      this.renderer = L.canvas({ pane: 'panePoligonosRelevados', padding: 0.5 });
     }
 
     try {

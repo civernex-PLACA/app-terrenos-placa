@@ -65,6 +65,9 @@ function inicializarMapa() {
 
   // 🟢 Overlay de parcelas catastrales (guía visual al agregar/editar)
   if (window.OverlayCatastro) window.OverlayCatastro.init(map);
+
+  // 🟢 Capa visual de calles (guía de referencia para el frente del lote)
+  if (window.CapasCalles) window.CapasCalles.init(map);
 }
 
 // 🟢 FUNCIÓN PARA CONMUTAR CAPAS DESDE TU DOCK
@@ -276,8 +279,16 @@ function toggleAddMode() {
     // modo agregar justo después de tocar el mapa y ubicar el pin), no
     // apagamos el overlay automático acá — Editor.cerrar() se encarga
     // cuando el panel realmente se cierre.
+    // 🟢 Ojo: se chequea "style.display", no la clase 'active' — Editor
+    // agrega esa clase recién 10ms después de abrir (para animar la
+    // transición), y este toggleAddMode() corre en el mismo instante
+    // síncrono que abre el panel. Chequear la clase acá siempre leía
+    // "todavía no está abierto" (aunque display ya estaba en 'flex') y
+    // apagaba el overlay justo al ubicar el pin, para prenderse recién
+    // 150ms después con el próximo recálculo — eso se veía como que la
+    // capa "se apagaba sola" al entrar a modo agregar.
     const modal = document.getElementById('modal-terreno');
-    const panelSigueAbierto = modal && modal.classList.contains('active');
+    const panelSigueAbierto = modal && modal.style.display === 'flex';
     if (!panelSigueAbierto && window.OverlayCatastro) window.OverlayCatastro.desactivarAutomatico();
   }
 }

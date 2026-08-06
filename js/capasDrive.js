@@ -102,6 +102,12 @@ window.CapasDrive = {
       if (window.OverlayCatastro && typeof window.OverlayCatastro.actualizar === 'function') {
         window.OverlayCatastro.actualizar();
       }
+      // 🟢 Mismo motivo que arriba, pero para la capa de calles: si ya
+      // estaba activada pero esta sección de calles todavía no había
+      // bajado, avisamos apenas está lista en vez de esperar un gesto.
+      if (window.CapasCalles && typeof window.CapasCalles.actualizar === 'function') {
+        window.CapasCalles.actualizar();
+      }
 
     } catch (e) {
       console.error(`❌ [CapasDrive] Error cargando ${fileName}:`, e);

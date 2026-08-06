@@ -12,7 +12,18 @@
 // ==========================================
 
 window.OverlayCatastro = {
-  ZOOM_MINIMO: 17,
+  ZOOM_MINIMO: 17,          // debajo de este zoom, se deja de dibujar (performance)
+  ZOOM_OPACIDAD_PLENA: 19,  // en este zoom (o más cercano), la opacidad ya es la máxima
+  OPACIDAD_MAXIMA: 0.65,
+  COLOR_CONTORNO: '#5f6368',
+
+  // 🟢 Entre ZOOM_MINIMO y ZOOM_OPACIDAD_PLENA la opacidad interpola
+  // linealmente en vez de aparecer/desaparecer de golpe al cruzar
+  // ZOOM_MINIMO — se recalcula en cada zoomend (ver _recalcular), así que
+  // el "paso" real son los niveles de zoom enteros entre medio, no una
+  // animación cuadro a cuadro (a propósito: restylear en cada frame de un
+  // pinch-zoom en celular sería caro).
+  opacidadActual: 0,
 
   mapaRef: null,
 
@@ -33,8 +44,28 @@ window.OverlayCatastro = {
   init: function (mapa) {
     this.mapaRef = mapa;
     if (!this.mapaRef) return;
+
+    // 🟢 Pane propio (en vez del 'overlayPane' por defecto que comparten
+    // reglaLinea/secciones/GPS) para que el orden contra el pane de
+    // Polígonos ya relevados sea determinístico y no dependa de cuál de
+    // los dos canvas se creó primero en tiempo de ejecución.
+    if (!this.mapaRef.getPane('paneCatastroCompleto')) {
+      this.mapaRef.createPane('paneCatastroCompleto');
+      this.mapaRef.getPane('paneCatastroCompleto').style.zIndex = 401;
+    }
+
     this.mapaRef.on('moveend', () => this.actualizar());
     this.mapaRef.on('zoomend', () => this.actualizar());
+  },
+
+  // 🟢 0 en ZOOM_MINIMO (recién empieza a existir) hasta OPACIDAD_MAXIMA
+  // en ZOOM_OPACIDAD_PLENA o más cerca — así el fade-in/out es gradual en
+  // vez del corte brusco que había antes al cruzar ZOOM_MINIMO.
+  _calcularOpacidad: function (zoom) {
+    if (zoom <= this.ZOOM_MINIMO) return 0;
+    if (zoom >= this.ZOOM_OPACIDAD_PLENA) return this.OPACIDAD_MAXIMA;
+    const factor = (zoom - this.ZOOM_MINIMO) / (this.ZOOM_OPACIDAD_PLENA - this.ZOOM_MINIMO);
+    return this.OPACIDAD_MAXIMA * factor;
   },
 
   toggleManual: function () {
@@ -87,6 +118,10 @@ window.OverlayCatastro = {
       this.limpiarTodo();
       return;
     }
+
+    const opacidadNueva = this._calcularOpacidad(zoom);
+    const cambioOpacidad = opacidadNueva !== this.opacidadActual;
+    this.opacidadActual = opacidadNueva;
 
     const capaSecciones = window.CatastroGIS.capaSeccionesMaestra;
     if (!capaSecciones || !capaSecciones.features) return; // todavía no cargó
@@ -143,6 +178,15 @@ window.OverlayCatastro = {
     Object.keys(this.poligonosDibujados).forEach(idgis => {
       if (!idsVistosAhora.has(idgis)) this._quitarPoligono(idgis);
     });
+
+    // 4. Si cambió el zoom (y con él la opacidad objetivo), restylear lo
+    // que ya estaba dibujado — si no, solo lo nuevo tendría la opacidad
+    // correcta y el resto quedaría con la de un zoom anterior.
+    if (cambioOpacidad) {
+      Object.values(this.poligonosDibujados).forEach(capa => {
+        capa.setStyle({ opacity: this.opacidadActual, fillOpacity: this.opacidadActual });
+      });
+    }
   },
 
   // 🟢 La capa enriquecida ya viene en lat/lng — a diferencia de antes,
@@ -156,20 +200,23 @@ window.OverlayCatastro = {
     }
     // 🟢 Renderer de Canvas compartido para TODAS las parcelas del overlay:
     // en vez de un <path> SVG por parcela (pesado con muchas a la vez),
-    // Leaflet las dibuja todas sobre un único <canvas>.
+    // Leaflet las dibuja todas sobre un único <canvas>. En su propio pane
+    // ('paneCatastroCompleto', ver init) para que quede siempre por debajo
+    // de los polígonos ya relevados sin importar cuál de los dos se creó
+    // primero en tiempo de ejecución.
     if (!this.renderer) {
-      this.renderer = L.canvas({ padding: 0.5 });
+      this.renderer = L.canvas({ pane: 'paneCatastroCompleto', padding: 0.5 });
     }
 
     const capa = L.geoJSON(geoJsonGPS, {
       renderer: this.renderer,
       interactive: false, // guía visual: no compite con el clic del mapa
       style: {
-        color: '#9aa0a6',
+        color: this.COLOR_CONTORNO,
         weight: 1,
-        opacity: 0.5,
-        fillColor: '#9aa0a6',
-        fillOpacity: 0.5
+        opacity: this.opacidadActual,
+        fillColor: this.COLOR_CONTORNO,
+        fillOpacity: this.opacidadActual
       }
     });
 
