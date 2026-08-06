@@ -257,10 +257,18 @@ html {
     border-top: 1px solid #f0f0f0;
   }
 
-  /* 🟢 A la izquierda de todo en modo vertical */
-  #btn-logout {
-    order: -1;
-  }
+  /* 🟢 Orden pedido para el modo vertical: Cerrar sesión, Cambiar mapa,
+     Regla, GPS, Añadir (centro), Secciones, Parcelas, Calles. En modo
+     horizontal no se toca — ahí sigue el orden natural del HTML más el
+     "logout al final" de más abajo. */
+  #btn-logout { order: -1; }
+  #btn-satelite { order: 1; }
+  #btn-ruler { order: 2; }
+  #btn-location { order: 3; }
+  #btn-add { order: 4; }
+  #btn-secciones { order: 5; }
+  #btn-overlay-parcelas { order: 6; }
+  #btn-calles { order: 7; }
 }
 
 /* 2. MODO HORIZONTAL / PC (Barra en borde derecho) */
