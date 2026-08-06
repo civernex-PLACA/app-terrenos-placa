@@ -6,8 +6,10 @@
 // frente/medianera/ochava vive en el backend y todavía no está conectado
 // a nada automático. Esto es solo la referencia visual en el mapa.
 //
-// Activación 100% manual (botón del dock) — a diferencia del overlay gris
-// de parcelas, esta capa NO se prende sola al entrar a agregar/editar.
+// Sin botón propio: se activa/desactiva junto con OverlayCatastro (mismo
+// interruptor manual "Ver Parcelas" + el automático de agregar/editar) —
+// ver OverlayCatastro._sincronizarEstado(), que llama a activar()/
+// desactivar() acá cada vez que cambia su propio estado combinado.
 //
 // Mismo patrón de performance que OverlayCatastro (overlayCatastro.js):
 // - Solo se activa con zoom cercano (ZOOM_MINIMO).
@@ -56,17 +58,17 @@ window.CapasCalles = {
     this.mapaRef.on('zoomend', () => this.actualizar());
   },
 
-  toggle: function () {
-    this.activo = !this.activo;
-    const btn = document.getElementById('btn-calles');
-    if (btn) btn.classList.toggle('herramienta-activa', this.activo);
+  activar: function () {
+    if (this.activo) return;
+    this.activo = true;
+    this.actualizar();
+  },
 
-    if (this.activo) {
-      this.actualizar();
-    } else {
-      clearTimeout(this.timeoutRecalculo);
-      this.limpiarTodo();
-    }
+  desactivar: function () {
+    if (!this.activo) return;
+    this.activo = false;
+    clearTimeout(this.timeoutRecalculo);
+    this.limpiarTodo();
   },
 
   limpiarTodo: function () {

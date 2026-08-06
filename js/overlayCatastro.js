@@ -12,18 +12,20 @@
 // ==========================================
 
 window.OverlayCatastro = {
-  ZOOM_MINIMO: 17,          // debajo de este zoom, se deja de dibujar (performance)
-  ZOOM_OPACIDAD_PLENA: 19,  // en este zoom (o más cercano), la opacidad ya es la máxima
-  OPACIDAD_MAXIMA: 0.65,
+  ZOOM_MINIMO: 15,          // debajo de este zoom, se deja de dibujar (performance)
+  ZOOM_OPACIDAD_PLENA: 19,  // en este zoom (o más cercano), el fade ya está al 100%
+  OPACIDAD_MAXIMA: 0.65,    // opacidad de cada polígono una vez que el fade llegó al 100%
   COLOR_CONTORNO: '#5f6368',
 
-  // 🟢 Entre ZOOM_MINIMO y ZOOM_OPACIDAD_PLENA la opacidad interpola
-  // linealmente en vez de aparecer/desaparecer de golpe al cruzar
-  // ZOOM_MINIMO — se recalcula en cada zoomend (ver _recalcular), así que
-  // el "paso" real son los niveles de zoom enteros entre medio, no una
-  // animación cuadro a cuadro (a propósito: restylear en cada frame de un
-  // pinch-zoom en celular sería caro).
-  opacidadActual: 0,
+  // 🟢 El fade ya NO se hace restyleando cada polígono en cada zoomend
+  // (eso cambiaba el color de golpe, sin transición visible, aunque el
+  // VALOR calculado sí era gradual). Ahora cada polígono se dibuja con
+  // OPACIDAD_MAXIMA fija, y el fade se aplica una sola vez sobre el
+  // <div> del pane completo (CSS opacity + transition) — un solo cambio
+  // por zoomend en vez de uno por polígono, y el navegador anima la
+  // transición solo (GPU, sin redibujar el canvas).
+  DURACION_FADE_MS: 400,
+  factorFadeActual: 0,
 
   mapaRef: null,
 
@@ -46,26 +48,33 @@ window.OverlayCatastro = {
     if (!this.mapaRef) return;
 
     // 🟢 Pane propio (en vez del 'overlayPane' por defecto que comparten
-    // reglaLinea/secciones/GPS) para que el orden contra el pane de
-    // Polígonos ya relevados sea determinístico y no dependa de cuál de
-    // los dos canvas se creó primero en tiempo de ejecución.
+    // secciones/GPS) para que el orden contra el pane de Polígonos ya
+    // relevados sea determinístico y no dependa de cuál de los dos
+    // canvas se creó primero en tiempo de ejecución.
     if (!this.mapaRef.getPane('paneCatastroCompleto')) {
-      this.mapaRef.createPane('paneCatastroCompleto');
-      this.mapaRef.getPane('paneCatastroCompleto').style.zIndex = 401;
+      const pane = this.mapaRef.createPane('paneCatastroCompleto');
+      pane.style.zIndex = 401;
+      pane.style.opacity = 0;
+      // 🟢 Acá vive el fade suave: cambiar opacity en JS de golpe
+      // (abajo, en _recalcular) dispara esta transición sola, animada
+      // por el navegador — no hace falta requestAnimationFrame ni redibujar
+      // el canvas para lograr el efecto.
+      pane.style.transition = 'opacity ' + this.DURACION_FADE_MS + 'ms ease';
     }
 
     this.mapaRef.on('moveend', () => this.actualizar());
     this.mapaRef.on('zoomend', () => this.actualizar());
   },
 
-  // 🟢 0 en ZOOM_MINIMO (recién empieza a existir) hasta OPACIDAD_MAXIMA
-  // en ZOOM_OPACIDAD_PLENA o más cerca — así el fade-in/out es gradual en
-  // vez del corte brusco que había antes al cruzar ZOOM_MINIMO.
-  _calcularOpacidad: function (zoom) {
+  // 🟢 0 en ZOOM_MINIMO (recién empieza a existir) hasta 1 en
+  // ZOOM_OPACIDAD_PLENA o más cerca — factor 0 a 1, NO el valor final de
+  // opacidad (eso es OPACIDAD_MAXIMA, fijo en cada polígono — ver
+  // _dibujarPoligono). Este factor es lo que se aplica como opacity del
+  // pane completo.
+  _calcularFactorFade: function (zoom) {
     if (zoom <= this.ZOOM_MINIMO) return 0;
-    if (zoom >= this.ZOOM_OPACIDAD_PLENA) return this.OPACIDAD_MAXIMA;
-    const factor = (zoom - this.ZOOM_MINIMO) / (this.ZOOM_OPACIDAD_PLENA - this.ZOOM_MINIMO);
-    return this.OPACIDAD_MAXIMA * factor;
+    if (zoom >= this.ZOOM_OPACIDAD_PLENA) return 1;
+    return (zoom - this.ZOOM_MINIMO) / (this.ZOOM_OPACIDAD_PLENA - this.ZOOM_MINIMO);
   },
 
   toggleManual: function () {
@@ -95,6 +104,13 @@ window.OverlayCatastro = {
       clearTimeout(this.timeoutRecalculo);
       this.limpiarTodo();
     }
+
+    // 🟢 La capa de calles ya no tiene botón propio — se muestra siempre
+    // junto con este overlay (mismo interruptor manual/automático).
+    if (window.CapasCalles) {
+      if (debeEstarActivo) window.CapasCalles.activar();
+      else window.CapasCalles.desactivar();
+    }
   },
 
   limpiarTodo: function () {
@@ -119,9 +135,14 @@ window.OverlayCatastro = {
       return;
     }
 
-    const opacidadNueva = this._calcularOpacidad(zoom);
-    const cambioOpacidad = opacidadNueva !== this.opacidadActual;
-    this.opacidadActual = opacidadNueva;
+    // 🟢 Un solo cambio de opacity en el pane, no por polígono — el CSS
+    // transition (ver init) hace que se anime suave hacia el valor nuevo.
+    const factorFadeNuevo = this._calcularFactorFade(zoom);
+    if (factorFadeNuevo !== this.factorFadeActual) {
+      this.factorFadeActual = factorFadeNuevo;
+      const pane = this.mapaRef.getPane('paneCatastroCompleto');
+      if (pane) pane.style.opacity = factorFadeNuevo;
+    }
 
     const capaSecciones = window.CatastroGIS.capaSeccionesMaestra;
     if (!capaSecciones || !capaSecciones.features) return; // todavía no cargó
@@ -178,15 +199,6 @@ window.OverlayCatastro = {
     Object.keys(this.poligonosDibujados).forEach(idgis => {
       if (!idsVistosAhora.has(idgis)) this._quitarPoligono(idgis);
     });
-
-    // 4. Si cambió el zoom (y con él la opacidad objetivo), restylear lo
-    // que ya estaba dibujado — si no, solo lo nuevo tendría la opacidad
-    // correcta y el resto quedaría con la de un zoom anterior.
-    if (cambioOpacidad) {
-      Object.values(this.poligonosDibujados).forEach(capa => {
-        capa.setStyle({ opacity: this.opacidadActual, fillOpacity: this.opacidadActual });
-      });
-    }
   },
 
   // 🟢 La capa enriquecida ya viene en lat/lng — a diferencia de antes,
@@ -208,15 +220,18 @@ window.OverlayCatastro = {
       this.renderer = L.canvas({ pane: 'paneCatastroCompleto', padding: 0.5 });
     }
 
+    // 🟢 Opacidad fija (no depende del zoom acá) — el fade por zoom se
+    // aplica una sola vez sobre el pane completo, no polígono por
+    // polígono (ver _recalcular/init).
     const capa = L.geoJSON(geoJsonGPS, {
       renderer: this.renderer,
       interactive: false, // guía visual: no compite con el clic del mapa
       style: {
         color: this.COLOR_CONTORNO,
         weight: 1,
-        opacity: this.opacidadActual,
+        opacity: this.OPACIDAD_MAXIMA,
         fillColor: this.COLOR_CONTORNO,
-        fillOpacity: this.opacidadActual
+        fillOpacity: this.OPACIDAD_MAXIMA
       }
     });
 

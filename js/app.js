@@ -66,9 +66,6 @@ function cargarIconosUI() {
   const icoGps = document.getElementById('icono-gps');
   if (icoGps) icoGps.innerHTML = Iconos.gps();
 
-  const icoRegla = document.getElementById('icono-regla');
-  if (icoRegla) icoRegla.innerHTML = Iconos.regla();
-
   const icoLogout = document.getElementById('icono-logout');
   if (icoLogout && typeof Iconos !== 'undefined' && Iconos.salir) {
     icoLogout.innerHTML = Iconos.salir();
@@ -87,11 +84,6 @@ function cargarIconosUI() {
   const contenedorIconoParcelas = document.getElementById('icono-overlay-parcelas');
   if (contenedorIconoParcelas && typeof Iconos !== 'undefined' && Iconos.parcelas) {
     contenedorIconoParcelas.innerHTML = Iconos.parcelas();
-  }
-
-  const contenedorIconoCalles = document.getElementById('icono-calles');
-  if (contenedorIconoCalles && typeof Iconos !== 'undefined' && Iconos.calles) {
-    contenedorIconoCalles.innerHTML = Iconos.calles();
   }
 }
 

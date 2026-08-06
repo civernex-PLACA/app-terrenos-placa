@@ -19,10 +19,7 @@ window.terrenosCache = window.terrenosCache || {};
 window.markersPorId = window.markersPorId || {}; // 🟢 id de terreno -> su marcador de Leaflet, para poder tocar solo el que cambió
 window.datosGisTemporales = null; // 🟢 Memoria RAM para el polígono que estamos por agregar
 
-// Regla y GPS
-let modoRegla = false;
-let reglaPuntos = [];
-let reglaLinea = null;
+// GPS
 let userLocationMarker = null;
 
 // Variables para las capas del mapa
@@ -156,6 +153,7 @@ function dibujarPinEnMapa(lat, lng, id, colorHex, direccion, ficha = {}) {
       <div class="popup-datos">
         ${ficha.distrito || ficha.barrio ? `<b>Ubicación:</b> ${esc(ficha.distrito) || '-'} / ${esc(ficha.barrio) || '-'}<br>` : ''}
         ${ficha.frente || ficha.fondo ? `<b>Medidas:</b> ${esc(ficha.frente) || '-'}m x ${esc(ficha.fondo) || '-'}m<br>` : ''}
+        ${ficha.sup ? `<b>Superficie:</b> ${esc(ficha.sup)} m²<br>` : ''}
         ${ficha.tipolote ? `<b>Tipo Lote:</b> ${esc(ficha.tipolote)}<br>` : ''}
         ${ficha.agua || ficha.cloaca ? `<b>Servicios:</b> Agua: ${esc(ficha.agua) || 'No'} | Cloaca: ${esc(ficha.cloaca) || 'No'}<br>` : ''}
         ${ficha.propietario ? `<b>Propietario:</b> ${esc(ficha.propietario)}<br>` : ''}
@@ -264,7 +262,6 @@ function toggleAddMode() {
 
   if (window.modoAgregar) {
     if (btn) btn.classList.add('herramienta-activa');
-    if (modoRegla) toggleRegla();
     if (window.Editor) window.Editor.cerrar(false);
     // 🟢 El overlay de parcelas se prende apenas se activa el modo, no
     // recién cuando se hace el primer clic — así ayuda a decidir dónde
@@ -294,22 +291,6 @@ function toggleAddMode() {
 }
 
 function onMapClick(e) {
-  if (modoRegla) {
-    reglaPuntos.push(e.latlng);
-    if (reglaPuntos.length === 2) {
-      const distMetros = reglaPuntos[0].distanceTo(reglaPuntos[1]);
-      const distTexto = distMetros > 1000
-        ? `${(distMetros / 1000).toFixed(2)} km`
-        : `${distMetros.toFixed(1)} m`;
-
-      if (reglaLinea) map.removeLayer(reglaLinea);
-      reglaLinea = L.polyline(reglaPuntos, { color: '#fbbc04', weight: 4, dashArray: '6, 8' }).addTo(map);
-      mostrarInstruccion(`Distancia: ${distTexto}`);
-      reglaPuntos = [];
-    }
-    return;
-  }
-
   const modal = document.getElementById('modal-terreno');
   const panelAbierto = modal && modal.classList.contains('active');
 
@@ -420,7 +401,7 @@ window.iniciarEdicionDirecta = function (terrenoOrId) {
 };
 
 // ==========================================
-// HERRAMIENTAS ADICIONALES (GPS, Regla, Toasts)
+// HERRAMIENTAS ADICIONALES (GPS, Toasts)
 // ==========================================
 
 function mostrarInstruccion(mensaje) {
@@ -512,28 +493,4 @@ function obtenerUbicacionActual() {
     },
     { enableHighAccuracy: true }
   );
-}
-
-function toggleRegla() {
-  modoRegla = !modoRegla;
-  const btn = document.getElementById('btn-ruler');
-
-  if (modoRegla) {
-    if (window.modoAgregar) toggleAddMode();
-    if (btn) btn.classList.add('herramienta-activa');
-    mostrarInstruccion("Haz clic en dos puntos del mapa para medir la distancia");
-    limpiarRegla();
-  } else {
-    if (btn) btn.classList.remove('herramienta-activa');
-    limpiarRegla();
-    ocultarInstruccion();
-  }
-}
-
-function limpiarRegla() {
-  reglaPuntos = [];
-  if (reglaLinea && map) {
-    map.removeLayer(reglaLinea);
-    reglaLinea = null;
-  }
 }
