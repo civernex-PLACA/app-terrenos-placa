@@ -5,25 +5,16 @@
 window.CatastroGIS = {
   capaSeccionesMaestra: null,
 
+  // 🟢 Geometría pura (point-in-polygon, mercator↔latlng, bbox, área
+  // shoelace) vive en GeoMath (js/geoMath.js) — acá solo quedan wrappers
+  // para no tener que tocar los call-sites (mapa.js, capasCalles.js,
+  // overlayCatastro.js, poligonos.js) que ya llaman a window.CatastroGIS.*.
   puntoEnPoligono: function(punto, vs) {
-    const x = punto[0], y = punto[1];
-    let inside = false;
-    for (let i = 0, j = vs.length - 1; i < vs.length; j = i++) {
-      const xi = vs[i][0], yi = vs[i][1];
-      const xj = vs[j][0], yj = vs[j][1];
-      const intersect = ((yi > y) !== (yj > y)) &&
-        (x < (xj - xi) * (y - yi) / (yj - yi) + xi);
-      if (intersect) inside = !inside;
-    }
-    return inside;
+    return window.GeoMath.puntoEnPoligono(punto, vs);
   },
 
   mercatorToLatLng: function(x, y) {
-    const rMajor = 6378137;
-    const lng = (x / rMajor) * (180 / Math.PI);
-    const latRad = Math.atan(Math.exp(y / rMajor));
-    const lat = (2 * latRad - Math.PI / 2) * (180 / Math.PI);
-    return [lng, lat];
+    return window.GeoMath.mercatorToLatLng(x, y);
   },
 
   // 🟢 Inversa de mercatorToLatLng — usada por el overlay de parcelas para
@@ -31,10 +22,7 @@ window.CatastroGIS = {
   // comparar contra las coordenadas de las capas (que ya vienen en
   // Mercator) sin tener que convertir cada parcela candidata.
   latLngToMercator: function(lat, lng) {
-    const r = 6378137;
-    const x = lng * Math.PI / 180 * r;
-    const y = Math.log(Math.tan(Math.PI / 4 + (lat * Math.PI / 180) / 2)) * r;
-    return [x, y];
+    return window.GeoMath.latLngToMercator(lat, lng);
   },
 
   // 🟢 Área aproximada de un polígono (m²) — SOLO para la vista previa
@@ -43,54 +31,21 @@ window.CatastroGIS = {
   // con el motor Gauss-Krüger de precisión (Limpieza_calcularAreaPoligono,
   // 7_ModuloLimpieza.js — "NO TOCAR esta fórmula"), reusando la misma
   // proyección que ya está validada contra el catastro real. Acá, en
-  // cambio, se usa una proyección plana simple (equirectangular: cada
-  // grado de lng se escala por el coseno de la latitud, sin las
-  // correcciones de Gauss-Krüger) a propósito — es mucho más rápida y
-  // el error que introduce a la escala de un lote individual (decenas
-  // de metros) es despreciable para una vista previa informativa.
+  // cambio, se usa la proyección equirectangular simple de GeoMath a
+  // propósito — es mucho más rápida y el error que introduce a la escala
+  // de un lote individual (decenas de metros) es despreciable para una
+  // vista previa informativa.
   calcularSuperficieAproximada: function(geometry) {
-    let anillo = null;
-    if (geometry && geometry.type === 'Polygon') anillo = geometry.coordinates[0];
-    else if (geometry && geometry.type === 'MultiPolygon') anillo = geometry.coordinates[0][0];
+    const anillo = window.GeoMath.extraerAnilloExterior(geometry);
     if (!anillo || anillo.length < 3) return null;
-
-    const R = 6378137; // radio terrestre (mismo valor que ya usa mercatorToLatLng)
-    const latRef = anillo[0][1] * Math.PI / 180;
-    const puntos = anillo.map(par => ({
-      x: (par[0] * Math.PI / 180) * R * Math.cos(latRef),
-      y: (par[1] * Math.PI / 180) * R
-    }));
-
-    let sumaShoelace = 0;
-    for (let i = 0; i < puntos.length; i++) {
-      const actual = puntos[i];
-      const siguiente = puntos[(i + 1) % puntos.length];
-      sumaShoelace += actual.x * siguiente.y - siguiente.x * actual.y;
-    }
-    return Math.round(Math.abs(sumaShoelace) / 2);
+    return window.GeoMath.calcularAreaShoelace(anillo);
   },
 
   // 🟢 Rectángulo (bounding box) en Mercator de una geometría GeoJSON.
   // Sirve para saber rápido si una parcela "puede" estar en el viewport,
   // sin tener que revisar punto por punto.
   calcularBBoxMercator: function(geometry) {
-    if (!geometry || !geometry.coordinates) return null;
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-
-    const recorrer = (coords) => {
-      if (typeof coords[0] === 'number') {
-        const [x, y] = coords;
-        if (x < minX) minX = x;
-        if (x > maxX) maxX = x;
-        if (y < minY) minY = y;
-        if (y > maxY) maxY = y;
-      } else {
-        coords.forEach(recorrer);
-      }
-    };
-    recorrer(geometry.coordinates);
-
-    return { minX, minY, maxX, maxY };
+    return window.GeoMath.calcularBBoxMercator(geometry);
   },
 
   // 🟢 Calcula el bbox de una feature UNA sola vez y lo guarda en la
@@ -105,8 +60,7 @@ window.CatastroGIS = {
   },
 
   bboxIntersecta: function(a, b) {
-    if (!a || !b) return false;
-    return a.minX <= b.maxX && a.maxX >= b.minX && a.minY <= b.maxY && a.maxY >= b.minY;
+    return window.GeoMath.bboxIntersecta(a, b);
   },
 
   convertirMultiPoligonoGPS: function(geometry) {
@@ -174,12 +128,7 @@ window.CatastroGIS = {
       const geom = feature.geometry;
       if (!geom) continue;
 
-      let anillos = [];
-      if (geom.type === 'MultiPolygon') {
-        anillos = geom.coordinates[0][0];
-      } else if (geom.type === 'Polygon') {
-        anillos = geom.coordinates[0];
-      }
+      const anillos = window.GeoMath.extraerAnilloExterior(geom) || [];
 
       if (anillos.length > 0 && this.puntoEnPoligono(puntoClickMercator, anillos)) {
         const props = feature.properties || {};
@@ -226,12 +175,7 @@ window.CatastroGIS = {
       const geom = parcela.geometry;
       if (!geom) continue;
 
-      let anillos = [];
-      if (geom.type === 'MultiPolygon') {
-        anillos = geom.coordinates[0][0];
-      } else if (geom.type === 'Polygon') {
-        anillos = geom.coordinates[0];
-      }
+      const anillos = window.GeoMath.extraerAnilloExterior(geom) || [];
 
       if (anillos.length > 0 && this.puntoEnPoligono(puntoClickLatLng, anillos)) {
         const tFin = performance.now();

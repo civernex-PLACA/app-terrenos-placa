@@ -55,17 +55,13 @@ window.MotorFrente = {
 
     if (!anilloParcela || anilloParcela.length < 3) return [];
 
-    // Proyección plana local (equirectangular) — mismo criterio que el
-    // backend, no hace falta la precisión de Gauss-Krüger acá (solo se
-    // comparan ángulos/distancias relativos a la escala de un lote, no
-    // se guarda el número) — más simple y portable al navegador.
-    const R = 6378137;
+    // Proyección plana (equirectangular, GeoMath.proyectarAMetros) — mismo
+    // criterio que el backend, no hace falta la precisión de Gauss-Krüger
+    // acá (solo se comparan ángulos/distancias relativos a la escala de un
+    // lote, no se guarda el número) — más simple y portable al navegador.
     const latRef = anilloParcela[0][1] * Math.PI / 180;
     const aMetros = function (lng, lat) {
-      return {
-        x: (lng * Math.PI / 180) * R * Math.cos(latRef),
-        y: (lat * Math.PI / 180) * R
-      };
+      return window.GeoMath.proyectarAMetros(lng, lat, latRef);
     };
 
     const puntosParcela = anilloParcela.map(function (p) { return aMetros(p[0], p[1]); });
@@ -151,49 +147,12 @@ window.MotorFrente = {
       });
     });
 
-    function distanciaPuntoASegmento(p, a, b) {
-      const dx = b.x - a.x, dy = b.y - a.y;
-      const largo2 = dx * dx + dy * dy;
-      if (largo2 === 0) return Math.hypot(p.x - a.x, p.y - a.y);
-      let t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / largo2;
-      t = Math.max(0, Math.min(1, t));
-      const proyX = a.x + t * dx, proyY = a.y + t * dy;
-      return Math.hypot(p.x - proyX, p.y - proyY);
-    }
-
-    // Distancia mínima entre dos segmentos — aproximación por los 4
-    // extremos (suficiente acá: un lado de parcela y una calle no se
-    // cruzan en la práctica, no hace falta el caso exacto de intersección).
-    function distanciaSegmentoASegmento(a1, b1, a2, b2) {
-      return Math.min(
-        distanciaPuntoASegmento(a1, a2, b2),
-        distanciaPuntoASegmento(b1, a2, b2),
-        distanciaPuntoASegmento(a2, a1, b1),
-        distanciaPuntoASegmento(b2, a1, b1)
-      );
-    }
-
-    // Ángulo entre dos segmentos, normalizado a 0-90° (0=paralelo,
-    // 90=perpendicular — la dirección de una recta no importa, solo su
-    // orientación).
-    function anguloEntre(a1, b1, a2, b2) {
-      const v1 = { x: b1.x - a1.x, y: b1.y - a1.y };
-      const v2 = { x: b2.x - a2.x, y: b2.y - a2.y };
-      const mag1 = Math.hypot(v1.x, v1.y), mag2 = Math.hypot(v2.x, v2.y);
-      if (mag1 === 0 || mag2 === 0) return 0;
-      let coseno = (v1.x * v2.x + v1.y * v2.y) / (mag1 * mag2);
-      coseno = Math.max(-1, Math.min(1, coseno));
-      let angulo = Math.acos(coseno) * 180 / Math.PI; // 0-180
-      if (angulo > 90) angulo = 180 - angulo;
-      return angulo;
-    }
-
     const resultados = lados.map(function (lado) {
       let mejor = null;
       segmentosCalles.forEach(function (seg) {
-        const distancia = distanciaSegmentoASegmento(lado.a, lado.b, seg.p1, seg.p2);
+        const distancia = window.GeoMath.distanciaSegmentoASegmento(lado.a, lado.b, seg.p1, seg.p2);
         if (!mejor || distancia < mejor.distancia) {
-          mejor = { distancia: distancia, angulo: anguloEntre(lado.a, lado.b, seg.p1, seg.p2), info: seg.info };
+          mejor = { distancia: distancia, angulo: window.GeoMath.anguloEntreSegmentos(lado.a, lado.b, seg.p1, seg.p2), info: seg.info };
         }
       });
 
@@ -237,15 +196,11 @@ window.MotorFrente = {
     return resultados;
   },
 
-  // 🟢 Mismo patrón de extracción de anillo exterior que
-  // CatastroGIS.obtenerDatosPorCoordenada (GeoJson.js) — factorizado
-  // acá porque motorFrente.js es la única parte del frontend que lo
-  // necesita fuera de ese archivo.
+  // 🟢 Wrapper sobre GeoMath.extraerAnilloExterior (mismo patrón que
+  // necesitaba CatastroGIS.obtenerDatosPorCoordenada, ahora centralizado
+  // en geoMath.js) — se mantiene el nombre acá para no tocar mapa.js.
   _extraerAnilloExterior: function (geometry) {
-    if (!geometry) return null;
-    if (geometry.type === 'MultiPolygon') return geometry.coordinates[0][0];
-    if (geometry.type === 'Polygon') return geometry.coordinates[0];
-    return null;
+    return window.GeoMath.extraerAnilloExterior(geometry);
   },
 
   // 🟢 Arma el texto de la sugerencia para mostrar en el formulario —
