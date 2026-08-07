@@ -42,7 +42,11 @@ window.Poligonos = {
         weight: 3,
         opacity: 0.9,
         fillColor: '#ea4335',
-        fillOpacity: 0.25
+        fillOpacity: 0.25,
+        // 🟢 Activa la animación de guiones en movimiento (estilos.css,
+        // .poligono-fantasma-animado + @keyframes marchaGuiones) — deja
+        // claro que este polígono todavía se está por confirmar/guardar.
+        className: 'poligono-fantasma-animado'
       }
     }).addTo(this.mapaRef);
   },

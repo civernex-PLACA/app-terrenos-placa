@@ -5,7 +5,7 @@
 // 🟢 Subimos la versión para forzar que todos los clientes renueven la caché
 // con la nueva estrategia (importante: cambiar este número cada vez que se
 // modifique este archivo, para que el navegador descarte la caché vieja).
-const CACHE_NAME = 'terrenos-app-v12';
+const CACHE_NAME = 'terrenos-app-v13';
 
 // Archivos críticos que la app necesita para arrancar sin internet.
 // 🟢 Se agregó capasDrive.js, que faltaba en la lista original.

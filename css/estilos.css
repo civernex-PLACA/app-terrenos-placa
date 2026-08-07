@@ -188,19 +188,29 @@ html {
    TOAST DE NOTIFICACIONES (RESPONSIVE & SPINNER)
    ========================================== */
 
-#loading-toast {
-  position: fixed;
-  z-index: 9999;
+/* 🟢 Estilo compartido de "toast en forma de píldora" — antes copiado
+   igual en #loading-toast, .toast-container y .toast-item por separado
+   (3 veces la misma media docena de propiedades); acá centralizado, cada
+   bloque de abajo solo agrega lo que le es propio (posición, animación
+   de entrada/salida, etc.). */
+#loading-toast,
+.toast-container,
+.toast-item {
   background: var(--color-blanco);
   padding: 10px 18px;
   border-radius: 30px;
   box-shadow: 0 4px 15px rgba(0, 0, 0, 0.12);
-  display: none;
-  align-items: center;
-  gap: 12px;
   font-size: 13px;
   font-weight: 600;
   color: #444;
+}
+
+#loading-toast {
+  position: fixed;
+  z-index: 9999;
+  display: none;
+  align-items: center;
+  gap: 12px;
   transition: all 0.3s ease;
 }
 
@@ -222,16 +232,21 @@ html {
   }
 }
 
-/* Instrucción en Pantalla (Centrado exacto con tipografía 100% blanca) */
+/* 🟢 Instrucción en pantalla — antes declarada dos veces en el archivo
+   (acá y en la sección de Toasts más abajo) con background/color
+   contradictorios, ambos !important; por orden de cascada, la variante
+   amarilla siempre le ganaba a esta. Unificado en un solo bloque con el
+   resultado que ya se ve en producción (no cambia nada visualmente). */
 .instruction-toast {
   position: fixed !important;
   top: 25px !important;
   left: 50% !important;
   transform: translateX(-50%) !important;
   z-index: 10000 !important;
-  background: transparent !important;
+  background: #fef7e0 !important;
+  color: #ea8600 !important;
+  border: 1px solid var(--color-alerta);
   box-shadow: none !important;
-  color: var(--color-blanco) !important;
   font-size: 15px !important;
   font-weight: 700 !important;
   letter-spacing: 0.3px;
@@ -399,7 +414,7 @@ html {
 /* Estado 1: Modo Agregar (Azul) */
 #btn-guardar-form.btn-nuevo {
   background-color: var(--color-primario);
-  color: white;
+  color: var(--color-blanco);
 }
 
 #btn-guardar-form.btn-nuevo:hover {
@@ -427,15 +442,8 @@ html {
   z-index: 3000;
   display: none;
   /* Oculto por defecto */
-  align-items: left;
+  align-items: center;
   gap: 12px;
-  background: white;
-  padding: 10px 18px;
-  border-radius: 30px;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.12);
-  font-size: 13px;
-  font-weight: 600;
-  color: #444;
   opacity: 0;
   transition: opacity 0.3s ease;
 }
@@ -444,13 +452,6 @@ html {
 .toast-container.visible {
   display: flex !important;
   opacity: 0.8;
-}
-
-/* Variante de instrucción (amarilla) */
-.instruction-toast {
-  background: #fef7e0 !important;
-  color: #ea8600 !important;
-  border: 1px solid var(--color-alerta);
 }
 
 /* ==========================================
@@ -491,13 +492,6 @@ html {
   display: flex;
   align-items: center;
   gap: 12px;
-  background: var(--color-blanco);
-  padding: 10px 18px;
-  border-radius: 30px;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.12);
-  font-size: 13px;
-  font-weight: 600;
-  color: #444;
   margin-bottom: 10px;
   max-height: 0;
   opacity: 0;
@@ -572,7 +566,7 @@ html {
   background: var(--color-primario);
   border: none;
   border-radius: 6px;
-  color: white;
+  color: var(--color-blanco);
   font-weight: bold;
   cursor: pointer;
   font-size: 12px;
@@ -603,7 +597,7 @@ html {
 }
 
 .panel-content {
-  background: white;
+  background: var(--color-blanco);
   box-shadow: 0 0 25px rgba(0, 0, 0, 0.25);
   overflow-y: auto;
   box-sizing: border-box;
@@ -725,7 +719,7 @@ html {
 
 .btn-primary {
   background: var(--color-primario);
-  color: white;
+  color: var(--color-blanco);
   margin-top: 15px;
 }
 
@@ -802,7 +796,7 @@ html {
   width: 100%;
   padding: 10px;
   background: var(--color-primario);
-  color: white;
+  color: var(--color-blanco);
   border: none;
   border-radius: 6px;
   font-weight: bold;
@@ -877,7 +871,7 @@ html {
   top: 50%;
   transform: translateY(-50%);
   background: rgba(0, 0, 0, 0.75);
-  color: white;
+  color: var(--color-blanco);
   padding: 4px 10px;
   border-radius: 6px;
   font-size: 11px;
@@ -916,7 +910,7 @@ html {
 /* Variantes de Tags */
 .tag-chip.chip-descartado {
   background-color: #202124;
-  color: #ffffff;
+  color: var(--color-blanco);
 }
 
 .tag-chip.chip-desfavorable {
@@ -999,7 +993,7 @@ html {
   right: 15px;
   background: rgba(255, 255, 255, 0.2);
   border: none;
-  color: white;
+  color: var(--color-blanco);
   font-size: 22px;
   width: 42px;
   height: 42px;
@@ -1054,7 +1048,7 @@ html {
   position: absolute;
   padding: 12px 18px;
   background: rgba(0, 0, 0, 0.5);
-  color: white;
+  color: var(--color-blanco);
   border: none;
   border-radius: 50%;
   font-size: 18px;
@@ -1136,66 +1130,13 @@ html {
 }
 
 /* ==========================================
-   TEXTO HELPER EN FORMULARIO Y DEV TRACE
+   TEXTO HELPER EN FORMULARIO
    ========================================== */
 .helper-text-fotos {
   color: #666;
   font-size: 0.8em;
   display: block;
   margin-top: 4px;
-}
-
-.dev-trace-box {
-  position: fixed;
-  bottom: 10px;
-  left: 10px;
-  right: 10px;
-  max-height: 45vh;
-  background: rgba(20, 20, 20, 0.92);
-  color: #00ff66;
-  padding: 12px;
-  z-index: 999999;
-  border-radius: 10px;
-  font-family: monospace;
-  font-size: 11px;
-  overflow-y: auto;
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.7);
-  border: 1px solid #444;
-}
-
-.dev-trace-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  border-bottom: 1px solid #444;
-  margin-bottom: 8px;
-  padding-bottom: 4px;
-  color: #fff;
-  font-weight: bold;
-}
-
-.dev-trace-btn {
-  background: #444;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  padding: 2px 6px;
-  font-size: 10px;
-  cursor: pointer;
-  margin-right: 5px;
-}
-
-.dev-trace-btn.btn-close {
-  background: var(--color-peligro);
-}
-
-.dev-trace-item {
-  margin-bottom: 6px;
-  padding: 6px;
-  border-left: 4px solid var(--color-primario);
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 0 4px 4px 0;
-  word-break: break-word;
 }
 
 /* ==========================================
@@ -1207,7 +1148,11 @@ html {
   }
 }
 
-.poligono-fantasma-animado path {
+/* 🟢 Sin " path" al final: Leaflet pone este className directo sobre el
+   <path> del polígono (className en las options de L.geoJSON), no sobre
+   un contenedor — con el descendiente de más, la regla no llegaba a
+   aplicarse nunca. */
+.poligono-fantasma-animado {
   stroke-dasharray: 8 8 !important;
   animation: marchaGuiones 1.5s linear infinite;
   will-change: stroke-dashoffset; /* 🚀 Fuerza el uso de GPU */
