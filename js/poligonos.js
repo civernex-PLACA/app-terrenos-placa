@@ -7,8 +7,6 @@ window.Poligonos = {
   capaFantasma: null,          // Parcela individual en edición/creación
   capaPermanentesGroup: null,  // Grupo de polígonos guardados de los terrenos
   capaPermanentesPorId: {},    // 🟢 id de terreno -> su capa de polígono, para actualizar/borrar solo el que cambió
-  capaSeccionesMap: null,      // Capa maestra de secciones de Posadas
-  modoSeccionesActivo: false,
 
   init: function(mapa) {
     this.mapaRef = mapa;
@@ -134,74 +132,5 @@ window.Poligonos = {
       this.capaPermanentesGroup.clearLayers();
     }
     this.capaPermanentesPorId = {};
-  },
-
-  // ----------------------------------------------------
-  // 3. CAPA MAESTRA DE SECCIONES (ESTÁTICA Y PASIVA)
-  // ----------------------------------------------------
-  toggleSecciones: function() {
-    this.modoSeccionesActivo = !this.modoSeccionesActivo;
-    const btn = document.getElementById('btn-secciones');
-    let idToast = null;
-
-    if (this.modoSeccionesActivo) {
-      if (btn) btn.classList.add('herramienta-activa');
-      this.dibujarSeccionesMaestras();
-      if (typeof mostrarToast === 'function') idToast = mostrarToast("Capa de Secciones activada");
-    } else {
-      if (btn) btn.classList.remove('herramienta-activa');
-      this.ocultarSeccionesMaestras();
-      if (typeof mostrarToast === 'function') idToast = mostrarToast("Capa de Secciones desactivada");
-    }
-
-    setTimeout(() => {
-      if (typeof ocultarToast === 'function') ocultarToast(idToast);
-    }, 1200);
-  },
-
-  dibujarSeccionesMaestras: async function() {
-    if (!this.mapaRef || !window.CatastroGIS) return;
-
-    const geoJsonSecciones = await window.CatastroGIS.cargarSeccionesDelRepo();
-    if (!geoJsonSecciones) return;
-
-    this.ocultarSeccionesMaestras();
-
-    const geoJsonConvertido = {
-      type: "FeatureCollection",
-      features: geoJsonSecciones.features.map(feat => ({
-        type: "Feature",
-        properties: feat.properties,
-        geometry: window.CatastroGIS.convertirMultiPoligonoGPS(feat.geometry)
-      }))
-    };
-
-    this.capaSeccionesMap = L.geoJSON(geoJsonConvertido, {
-      style: {
-        color: '#1a73e8',
-        weight: 1.5,
-        opacity: 0.6,
-        dashArray: '4, 4',
-        fillColor: '#1a73e8',
-        fillOpacity: 0.05,
-        interactive: false
-      },
-      onEachFeature: function(feature, layer) {
-        const numSeccion = feature.properties?.Text || feature.properties?.SECCCION || "S/N";
-        
-        layer.bindTooltip(`Sección ${numSeccion}`, {
-          permanent: true,
-          direction: 'center',
-          className: 'etiqueta-seccion-discreta'
-        });
-      }
-    }).addTo(this.mapaRef);
-  },
-
-  ocultarSeccionesMaestras: function() {
-    if (this.capaSeccionesMap && this.mapaRef) {
-      this.mapaRef.removeLayer(this.capaSeccionesMap);
-      this.capaSeccionesMap = null;
-    }
   }
 };

@@ -52,14 +52,12 @@ const Iconos = {
   gps: function() {
     return `<svg viewBox="0 0 24 24" class="svg-icon" fill="currentColor"><path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3A8.994 8.994 0 0 0 13 3.06V1h-2v2.06A8.994 8.994 0 0 0 3.06 11H1v2h2.06A8.994 8.994 0 0 0 11 20.94V23h2v-2.06A8.994 8.994 0 0 0 20.94 13H23v-2h-2.06zM12 19c-3.87 0-7-3.13-7-7s3.13-7 7-7 7 3.13 7 7-3.13 7-7 7z"/></svg>`;
   },
+  // 🟢 Usado en el botón fusionado "Ver Secciones y Parcelas"
+  // (overlayCatastro.js) — el ícono de "capas" superpuestas representa
+  // mejor la transición entre las dos capas que el de cuadraditos
+  // (parcelas) que tenía antes el botón, ahora eliminado.
   capas: function() {
     return `<svg viewBox="0 0 24 24" class="svg-icon" fill="currentColor"><path d="M11.99 18.54l-7.37-5.73L3 14.07l9 7 9-7-1.63-1.27-7.38 5.74zM12 16l7.36-5.73L21 9l-9-7-9 7 1.63 1.27L12 16z"/></svg>`;
-  },
-  // 🟢 Parecido al de "capas" (misma familia visual) pero con cuadraditos
-  // chicos, para sugerir "muchas unidades pequeñas" (parcelas) en vez de
-  // "pocas capas grandes" (secciones).
-  parcelas: function() {
-    return `<svg viewBox="0 0 24 24" class="svg-icon" fill="currentColor"><path d="M4 8h4V4H4v4zm6 12h4v-4h-4v4zm-6 0h4v-4H4v4zm0-6h4v-4H4v4zm6 0h4v-4h-4v4zm6-10v4h4V4h-4zm-6 4h4V4h-4v4zm6 6h4v-4h-4v4zm0 6h4v-4h-4v4z"/></svg>`;
   },
   dev: function() {
     return `<svg viewBox="0 0 24 24" class="svg-icon" fill="currentColor"><path d="M22.7 19l-9.1-9.1c.9-2.3.4-5-1.5-6.9-2-2-5-2.4-7.4-1.3L9 6 6 9 1.6 4.6C.4 7 1 10 3 12c1.9 1.9 4.6 2.4 6.9 1.5l9.1 9.1c.4.4 1 .4 1.4 0l2.3-2.3c.4-.4.4-1.1 0-1.3z"/></svg>`;

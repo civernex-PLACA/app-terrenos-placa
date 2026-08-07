@@ -7,9 +7,10 @@
 // a nada automático. Esto es solo la referencia visual en el mapa.
 //
 // Sin botón propio: se activa/desactiva junto con OverlayCatastro (mismo
-// interruptor manual "Ver Parcelas" + el automático de agregar/editar) —
-// ver OverlayCatastro._sincronizarEstado(), que llama a activar()/
-// desactivar() acá cada vez que cambia su propio estado combinado.
+// interruptor manual "Ver Secciones y Parcelas" + el automático de
+// agregar/editar) — ver OverlayCatastro._sincronizarEstado(), que llama a
+// activar()/desactivar() acá cada vez que cambia su propio estado
+// combinado.
 //
 // Mismo patrón de performance que OverlayCatastro (overlayCatastro.js):
 // - Solo se activa con zoom cercano (ZOOM_MINIMO).
@@ -28,9 +29,11 @@
 // ==========================================
 
 window.CapasCalles = {
-  // Un poco antes que el overlay de parcelas (ZOOM_MINIMO 17 ahí): las
-  // calles orientan a nivel de manzana, no hace falta estar tan cerca
-  // como para distinguir cada parcela individual.
+  // 🟢 Coincide a propósito con el primer zoom donde Parcelas deja de
+  // estar en 0% de opacidad dentro de la transición de OverlayCatastro
+  // (ZOOM_TRANSICION_INICIO 15 → recién en 16 arranca a notarse, ver
+  // overlayCatastro.js) — las calles aparecen junto con las primeras
+  // parcelas visibles, no antes.
   ZOOM_MINIMO: 16,
   COLOR: '#f9ab00',
 

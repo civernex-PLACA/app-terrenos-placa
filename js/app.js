@@ -76,14 +76,11 @@ function cargarIconosUI() {
   if (icoDev && typeof Iconos !== 'undefined' && Iconos.dev) {
     icoDev.innerHTML = Iconos.dev();
   }
-  const contenedorIconoSecciones = document.getElementById('icono-secciones');
-  if (contenedorIconoSecciones && typeof Iconos !== 'undefined' && Iconos.capas) {
-    contenedorIconoSecciones.innerHTML = Iconos.capas();
-  }
-
+  // 🟢 Botón fusionado "Ver Secciones y Parcelas" (antes dos botones
+  // separados) — usa el ícono de capas superpuestas.
   const contenedorIconoParcelas = document.getElementById('icono-overlay-parcelas');
-  if (contenedorIconoParcelas && typeof Iconos !== 'undefined' && Iconos.parcelas) {
-    contenedorIconoParcelas.innerHTML = Iconos.parcelas();
+  if (contenedorIconoParcelas && typeof Iconos !== 'undefined' && Iconos.capas) {
+    contenedorIconoParcelas.innerHTML = Iconos.capas();
   }
 }
 

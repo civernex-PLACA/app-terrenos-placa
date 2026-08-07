@@ -31,11 +31,17 @@ function inicializarMapa() {
   if (map) return;
 
   // Removidos los botones de zoom (+/-) de Leaflet
-  map = L.map('map', { zoomControl: false }).setView([-27.362, -55.890], 13);
+  // 🟢 maxZoom 20 explícito acá (antes solo lo definía cada capa de
+  // tiles) — así el tope no cambia según cuál capa esté activa. OSM solo
+  // tiene tiles nativos hasta 19 (maxNativeZoom abajo): Leaflet
+  // "estira" el último nivel nativo para el zoom 20, mismo criterio que
+  // ya usa la capa satelital de Google (nativa hasta 20).
+  map = L.map('map', { zoomControl: false, maxZoom: 20 }).setView([-27.362, -55.890], 13);
 
   // 1. Capa estándar OpenStreetMap
   capaOSM = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-    maxZoom: 19,
+    maxNativeZoom: 19,
+    maxZoom: 20,
     attribution: '© OpenStreetMap'
   });
 

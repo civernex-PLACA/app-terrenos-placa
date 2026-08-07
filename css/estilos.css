@@ -289,15 +289,15 @@ html {
 
   /* 🟢 Orden pedido para el modo vertical: Cerrar sesión bien a la
      izquierda (aparte, no cuenta para centrar); de ahí, Cambiar mapa,
-     GPS, Añadir (centro real: 3ro de 5), Secciones, Parcelas+Calles. En
-     modo horizontal no se toca — ahí sigue el orden natural del HTML más
-     el "logout al final" de más abajo. */
+     GPS, Añadir (centro real: 3ro de 4), Secciones+Parcelas (antes dos
+     botones separados, fusionados en uno). En modo horizontal no se
+     toca — ahí sigue el orden natural del HTML más el "logout al final"
+     de más abajo. */
   #btn-logout { order: -1; }
   #btn-satelite { order: 1; }
   #btn-location { order: 2; }
   #btn-add { order: 3; }
-  #btn-secciones { order: 4; }
-  #btn-overlay-parcelas { order: 5; }
+  #btn-overlay-parcelas { order: 4; }
 }
 
 /* 2. MODO HORIZONTAL / PC (Barra en borde derecho) */
